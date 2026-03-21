@@ -1,9 +1,11 @@
 'use client';
 
 import { useCluster } from '@providers/cluster';
+import { createSolanaRpc } from '@solana/kit';
 import { Cluster, ClusterStatus } from '@utils/cluster';
 import React from 'react';
-import { createSolanaRpc } from 'web3js-experimental';
+
+import { Logger } from '@/app/shared/lib/logger';
 
 export enum Status {
     Idle,
@@ -66,7 +68,7 @@ async function fetch(dispatch: Dispatch, cluster: Cluster, url: string) {
         });
     } catch (err) {
         if (cluster !== Cluster.Custom) {
-            console.error(err, { url });
+            Logger.error(err, { url });
         }
         dispatch('Failed to fetch supply');
     }

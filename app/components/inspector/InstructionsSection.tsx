@@ -1,33 +1,38 @@
 import { BaseInstructionCard } from '@components/common/BaseInstructionCard';
+import { useAnchorProgram } from '@entities/idl';
 import { useCluster } from '@providers/cluster';
-import { ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
     AddressLookupTableAccount,
     ComputeBudgetProgram,
+    SystemProgram,
     TransactionInstruction,
     TransactionMessage,
     VersionedMessage,
 } from '@solana/web3.js';
+import { TOKEN_2022_PROGRAM_ADDRESS } from '@solana-program/token-2022';
 import { getProgramName } from '@utils/tx';
 import React from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import { useAddressLookupTables } from '@/app/providers/accounts';
-import { useAnchorProgram } from '@/app/providers/anchor';
 import { FetchStatus } from '@/app/providers/cache';
 
 import { ErrorCard } from '../common/ErrorCard';
+import { InspectorInstructionCard as InspectorInstructionCardComponent } from '../common/InspectorInstructionCard';
 import { LoadingCard } from '../common/LoadingCard';
 import AnchorDetailsCard from '../instruction/AnchorDetailsCard';
 import { ComputeBudgetDetailsCard } from '../instruction/ComputeBudgetDetailsCard';
+import { SystemDetailsCard } from '../instruction/system/SystemDetailsCard';
+import { TokenDetailsCard } from '../instruction/token/TokenDetailsCard';
 import { AssociatedTokenDetailsCard } from './associated-token/AssociatedTokenDetailsCard';
-import { intoParsedInstruction } from './into-parsed-data';
+import { intoParsedInstruction, intoParsedTransaction } from './into-parsed-data';
 import { UnknownDetailsCard } from './UnknownDetailsCard';
 
 export function InstructionsSection({ message }: { message: VersionedMessage }) {
     // Fetch all address lookup tables
     const hydratedTables = useAddressLookupTables(
-        message.addressTableLookups.map(lookup => lookup.accountKey.toString())
+        message.addressTableLookups.map(lookup => lookup.accountKey.toString()),
     );
     for (let i = 0; i < hydratedTables.length; i++) {
         const table = hydratedTables[i];
@@ -43,14 +48,14 @@ export function InstructionsSection({ message }: { message: VersionedMessage }) 
     }
 
     const allDefined = hydratedTables.every(
-        table => table !== undefined && table[0] instanceof AddressLookupTableAccount
+        table => table !== undefined && table[0] instanceof AddressLookupTableAccount,
     );
     if (!allDefined) {
         return <LoadingCard />;
     }
 
     const addressLookupTableAccounts = (hydratedTables as any as Array<[AddressLookupTableAccount, FetchStatus]>).map(
-        table => table[0]
+        table => table[0],
     );
     const transactionMessage = TransactionMessage.decompile(message, { addressLookupTableAccounts });
 
@@ -108,6 +113,7 @@ function InspectorInstructionCard({
     //  - result is `err: null` as at this point there should not be errors
     const result = { err: null };
     const signature = '';
+
     switch (ix.programId.toString()) {
         case ASSOCIATED_TOKEN_PROGRAM_ID.toString(): {
             // NOTE: current limitation is that innerInstructions won't be present at the AssociatedTokenDetailsCard. For that purpose we might need to simulateTransactions to get them.
@@ -135,6 +141,67 @@ function InspectorInstructionCard({
                     InstructionCardComponent={BaseInstructionCard}
                 />
             );
+        }
+        case SystemProgram.programId.toString(): {
+            const asParsedInstruction = intoParsedInstruction(ix);
+            const asParsedTransaction = intoParsedTransaction(ix, message);
+            return (
+                <SystemDetailsCard
+                    key={index}
+                    ix={asParsedInstruction}
+                    tx={asParsedTransaction}
+                    index={index}
+                    result={result}
+                    raw={ix}
+                />
+            );
+        }
+        case TOKEN_PROGRAM_ID.toString(): {
+            const asParsedInstruction = intoParsedInstruction(ix);
+            const asParsedTransaction = intoParsedTransaction(ix, message, [asParsedInstruction]);
+            // Only render TokenDetailsCard if the instruction was successfully parsed
+            if (asParsedInstruction.parsed?.type) {
+                return (
+                    <ErrorBoundary
+                        fallback={<UnknownDetailsCard key={index} index={index} ix={ix} programName={programName} />}
+                    >
+                        <TokenDetailsCard
+                            key={index}
+                            ix={asParsedInstruction}
+                            tx={asParsedTransaction}
+                            index={index}
+                            result={result}
+                            InstructionCardComponent={InspectorInstructionCardComponent}
+                            message={message}
+                            raw={ix}
+                        />
+                    </ErrorBoundary>
+                );
+            }
+            // Fall through to unknown if parsing failed
+            break;
+        }
+        case TOKEN_2022_PROGRAM_ADDRESS: {
+            const asParsedInstruction = intoParsedInstruction(ix);
+            const asParsedTransaction = intoParsedTransaction(ix, message, [asParsedInstruction]);
+            // Only render TokenDetailsCard if the instruction was successfully parsed
+            if (asParsedInstruction.parsed?.type) {
+                return (
+                    <ErrorBoundary
+                        fallback={<UnknownDetailsCard key={index} index={index} ix={ix} programName={programName} />}
+                    >
+                        <TokenDetailsCard
+                            key={index}
+                            ix={asParsedInstruction}
+                            tx={asParsedTransaction}
+                            index={index}
+                            result={result}
+                        />
+                    </ErrorBoundary>
+                );
+            }
+            // Fall through to unknown if parsing failed
+            break;
         }
         default: {
             // unknown program; allow to render the next card

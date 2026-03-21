@@ -2,6 +2,7 @@
 
 import Logo from '@img/logos-solana/dark-explorer-logo.svg';
 import { useDisclosure } from '@mantine/hooks';
+import { cn } from '@shared/utils';
 import { useClusterPath } from '@utils/url';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -19,29 +20,34 @@ export function Navbar({ children }: INavbarProps) {
     const homePath = useClusterPath({ pathname: '/' });
     const featureGatesPath = useClusterPath({ pathname: '/feature-gates' });
     const supplyPath = useClusterPath({ pathname: '/supply' });
+    const programsPath = useClusterPath({ pathname: '/verified-programs' });
     const inspectorPath = useClusterPath({ pathname: '/tx/inspector' });
     const selectedLayoutSegment = useSelectedLayoutSegment();
     const selectedLayoutSegments = useSelectedLayoutSegments();
+
     return (
         <nav className="navbar navbar-expand-lg navbar-light">
-            <div className="container px-4">
+            <div className="container navbar-container">
                 <Link href={homePath}>
-                    <Image alt="Solana Explorer" height={22} src={Logo} width={214} />
+                    <Image alt="Solana Explorer" height={22} src={Logo} width={214} priority />
                 </Link>
 
                 <button className="navbar-toggler" type="button" onClick={navHandlers.toggle}>
                     <span className="navbar-toggler-icon"></span>
                 </button>
 
-                <div className="navbar-children d-flex align-items-center flex-grow-1 w-100 h-100 d-none d-lg-block">
+                <div
+                    className="navbar-children d-flex align-items-center flex-grow-1 h-100 d-none d-xl-block"
+                    style={{ minWidth: 0 }}
+                >
                     {children}
                 </div>
 
-                <div className={`collapse navbar-collapse ms-auto ${navOpened ? 'show' : ''} flex-shrink-0`}>
+                <div className={cn('collapse navbar-collapse ms-auto', navOpened && 'show', 'flex-shrink-0')}>
                     <ul className="navbar-nav me-auto">
                         <li className="nav-item">
                             <Link
-                                className={`nav-link${selectedLayoutSegment === 'feature-gates' ? ' active' : ''}`}
+                                className={cn('nav-link', selectedLayoutSegment === 'feature-gates' && 'active')}
                                 href={featureGatesPath}
                             >
                                 Feature Gates
@@ -49,7 +55,7 @@ export function Navbar({ children }: INavbarProps) {
                         </li>
                         <li className="nav-item">
                             <Link
-                                className={`nav-link${selectedLayoutSegment === 'supply' ? ' active' : ''}`}
+                                className={cn('nav-link', selectedLayoutSegment === 'supply' && 'active')}
                                 href={supplyPath}
                             >
                                 Supply
@@ -57,11 +63,20 @@ export function Navbar({ children }: INavbarProps) {
                         </li>
                         <li className="nav-item">
                             <Link
-                                className={`nav-link${
-                                    selectedLayoutSegments[0] === 'tx' && selectedLayoutSegments[1] === '(inspector)'
-                                        ? ' active'
-                                        : ''
-                                }`}
+                                className={cn('nav-link', selectedLayoutSegment === 'verified-programs' && 'active')}
+                                href={programsPath}
+                            >
+                                Programs
+                            </Link>
+                        </li>
+                        <li className="nav-item">
+                            <Link
+                                className={cn(
+                                    'nav-link',
+                                    selectedLayoutSegments[0] === 'tx' &&
+                                        selectedLayoutSegments[1] === '(inspector)' &&
+                                        'active',
+                                )}
                                 href={inspectorPath}
                             >
                                 Inspector

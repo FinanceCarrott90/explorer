@@ -1,5 +1,9 @@
+import { withBotId } from 'botid/next/config';
+import { withSentryConfig } from '@sentry/nextjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import { createSentryBuildConfig } from './sentry/config.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +14,8 @@ const SUPPLY_ALIASES = ['accounts', 'accounts/top'];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    // Use separate build directory for dev server to avoid conflicts with production builds
+    distDir: process.env.NODE_ENV === 'production' ? '.next' : '.next-dev',
     experimental: {
         // FIXME: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
         missingSuspenseWithCSRBailout: false,
@@ -24,6 +30,21 @@ const nextConfig = {
             },
         ],
     },
+    async headers() {
+        const seoFileHeaders = [
+            {
+                key: 'Cache-Control',
+                value: 'public, max-age=3600, stale-while-revalidate=86400',
+            },
+        ];
+
+        return [
+            { source: '/robots.txt', headers: seoFileHeaders },
+            { source: '/sitemap.xml', headers: seoFileHeaders },
+            { source: '/default-sitemap.xml', headers: seoFileHeaders },
+            { source: '/accounts-sitemap.xml', headers: seoFileHeaders },
+        ];
+    },
     async redirects() {
         return [
             // Leave this above `ADDRESS_ALIASES`, since it also provides an alias for `/accounts`.
@@ -37,7 +58,7 @@ const nextConfig = {
                     destination: '/' + ['address', path].join('/'),
                     permanent: true,
                     source: '/' + [oldRoot, path].join('/'),
-                }))
+                })),
             ),
             ...TX_ALIASES.map(oldRoot => ({
                 destination: '/' + ['tx', ':signature'].join('/'),
@@ -61,9 +82,10 @@ const nextConfig = {
             // Fixes npm packages that depend on `fs` module like `@project-serum/anchor`.
             config.resolve.fallback.fs = false;
         }
-        
+
         return config;
     },
 };
 
-export default nextConfig;
+/// Add wrapper to track errors with Sentry and BotID for bot protection
+export default withBotId(withSentryConfig(nextConfig, createSentryBuildConfig()));

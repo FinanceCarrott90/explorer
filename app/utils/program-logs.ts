@@ -3,6 +3,8 @@ import { Cluster } from '@utils/cluster';
 import { getTransactionInstructionError } from '@utils/program-err';
 import { getProgramName } from '@utils/tx';
 
+import { Logger } from '@/app/shared/lib/logger';
+
 export type LogMessage = {
     text: string;
     prefix: string;
@@ -22,14 +24,13 @@ export function parseProgramLogs(logs: string[], error: TransactionError | null,
     const prettyLogs: InstructionLogs[] = [];
     function prefixBuilder(
         // Indent level starts at 1.
-        indentLevel: number
+        indentLevel: number,
     ) {
         let prefix;
         if (indentLevel <= 0) {
-            console.warn(
-                `Tried to build a prefix for a program log at indent level \`${indentLevel}\`. ` +
-                    'Logs should only ever be built at indent level 1 or higher.'
-            );
+            Logger.warn('[utils:program-logs] Tried to build a prefix for a program log at invalid indent level', {
+                indentLevel,
+            });
             prefix = '';
         } else {
             prefix = new Array(indentLevel - 1).fill('\u00A0\u00A0').join('');
@@ -45,6 +46,7 @@ export function parseProgramLogs(logs: string[], error: TransactionError | null,
     logs.forEach(log => {
         if (log.startsWith('Program log:')) {
             // Use passive tense
+            // eslint-disable-next-line no-restricted-syntax -- extract program log message
             log = log.replace(/Program log: (.*)/g, (match, p1) => {
                 return `Program logged: "${p1}"`;
             });
@@ -54,9 +56,16 @@ export function parseProgramLogs(logs: string[], error: TransactionError | null,
                 style: 'muted',
                 text: log,
             });
+        } else if (log.startsWith('Program data:')) {
+            prettyLogs[prettyLogs.length - 1].logs.push({
+                prefix: prefixBuilder(depth),
+                style: 'muted',
+                text: log,
+            });
         } else if (log.startsWith('Log truncated')) {
             prettyLogs[prettyLogs.length - 1].truncated = true;
         } else {
+            // eslint-disable-next-line no-restricted-syntax -- match program invoke pattern
             const regex = /Program (\w*) invoke \[(\d)\]/g;
             const matches = Array.from(log.matchAll(regex));
 
@@ -118,6 +127,7 @@ export function parseProgramLogs(logs: string[], error: TransactionError | null,
                 }
 
                 // Remove redundant program address from logs
+                // eslint-disable-next-line no-restricted-syntax -- extract compute units consumed
                 log = log.replace(/Program \w* consumed (\d*) (.*)/g, (match, p1, p2) => {
                     // Only aggregate compute units consumed from top-level tx instructions
                     // because they include inner ix compute units as well.
@@ -163,4 +173,33 @@ export function parseProgramLogs(logs: string[], error: TransactionError | null,
     }
 
     return prettyLogs;
+}
+
+/**
+ * Extracts event data from transaction logs for a specific instruction.
+ * Returns an array of base64-encoded event data strings.
+ */
+export function extractEventsFromLogs(logs: string[], instructionIndex: number): string[] {
+    const events: string[] = [];
+    let currentIxIndex = -1;
+    let depth = 0;
+
+    for (const log of logs) {
+        // Track program invocations to match instruction indices
+        // eslint-disable-next-line no-restricted-syntax -- match program invoke pattern
+        if (log.match(/Program \w* invoke \[(\d)\]/)) {
+            if (depth === 0) {
+                currentIxIndex++;
+            }
+            depth++;
+        } else if (log.includes('success') || log.includes('failed')) {
+            depth--;
+        } else if (log.startsWith('Program data:') && currentIxIndex === instructionIndex) {
+            // Extract base64-encoded event data for the current instruction
+            const eventData = log.slice('Program data: '.length).trim();
+            events.push(eventData);
+        }
+    }
+
+    return events;
 }

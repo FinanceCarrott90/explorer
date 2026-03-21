@@ -1,9 +1,10 @@
 'use client';
 
+import { Domain } from '@entities/domain/lib/domain-struct';
 import { useHotkeys } from '@mantine/hooks';
 import { useCluster } from '@providers/cluster';
 import { VersionedMessage } from '@solana/web3.js';
-import { Cluster } from '@utils/cluster';
+import { Cluster, clusterSlug } from '@utils/cluster';
 import { SearchElement } from '@utils/token-search';
 import bs58 from 'bs58';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -11,13 +12,16 @@ import React, { MouseEventHandler, TouchEventHandler, useCallback, useId, useMem
 import { Search, X } from 'react-feather';
 import { ActionMeta, components, ControlProps, InputActionMeta, SelectInstance } from 'react-select';
 import AsyncSelect from 'react-select/async';
+import { is } from 'superstruct';
 
+import { Logger } from '@/app/shared/lib/logger';
 import FEATURES from '@/app/utils/feature-gate/featureGates.json';
 
 import { FetchedDomainInfo } from '../api/domain-info/[domain]/route';
 import { FeatureInfoType } from '../utils/feature-gate/types';
 import { LOADER_IDS, LoaderName, PROGRAM_INFO_BY_ID, SPECIAL_IDS, SYSVAR_IDS } from '../utils/programs';
 import { searchTokens } from '../utils/token-search';
+import { pickClusterParams } from '../utils/url';
 import { useDebouncedAsync } from '../utils/use-debounce-async';
 import { MIN_MESSAGE_LENGTH } from './inspector/RawInputCard';
 
@@ -25,10 +29,6 @@ interface SearchOptions {
     label: string;
     options: SearchElement[];
 }
-
-const hasDomainSyntax = (value: string) => {
-    return value.length > 3 && value.split('.').length === 2;
-};
 
 const RESET_VALUE = '' as any;
 
@@ -48,7 +48,14 @@ export function SearchBar() {
         if (meta.action === 'select-option') {
             // Always use the pathname directly if it contains query params
             if (pathname.includes('?')) {
-                router.push(pathname);
+                const [path, currentSearchParamsString] = pathname.split('?');
+                // break pathname to preserve existing params and allow to keep same cluster
+                const nextPath = pickClusterParams(
+                    path,
+                    new URLSearchParams(currentSearchParamsString),
+                    new URLSearchParams(`cluster=${clusterSlug(cluster)}`),
+                );
+                router.push(nextPath);
             } else {
                 // Only preserve existing query params for paths without their own params
                 const nextQueryString = searchParams?.toString();
@@ -69,7 +76,7 @@ export function SearchBar() {
         const [tokenOptions, domainOptions] = await Promise.allSettled([
             buildTokenOptions(search, cluster),
             // buildFeatureOptions(search),
-            hasDomainSyntax(search) && cluster === Cluster.MainnetBeta ? buildDomainOptions(search) : [],
+            is(search, Domain) && cluster === Cluster.MainnetBeta ? buildDomainOptions(search) : [],
         ]);
 
         const tokenOptionsAppendable = buildAppendableSearchOptions(tokenOptions, 'token');
@@ -93,7 +100,7 @@ export function SearchBar() {
                         selectRef.current?.clearValue();
                         selectRef.current?.blur();
                     },
-                    []
+                    [],
                 );
                 const hasValue = Boolean(selectRef.current?.inputRef?.value);
 
@@ -109,7 +116,7 @@ export function SearchBar() {
                     </components.Control>
                 );
             },
-        [setSearch, selectRef]
+        [setSearch, selectRef],
     );
 
     const onHotKeyPressHandler = useCallback(() => {
@@ -122,7 +129,7 @@ export function SearchBar() {
             ['/', onHotKeyPressHandler],
             ['mod+k', onHotKeyPressHandler],
         ],
-        ['INPUT', 'TEXTAREA']
+        ['INPUT', 'TEXTAREA'],
     );
 
     const noOptionsMessageHandler = useCallback(() => 'No Results', []);
@@ -147,7 +154,11 @@ export function SearchBar() {
                 onChange={onChange}
                 styles={{
                     control: style => ({ ...style, pointerEvents: 'all' }),
-                    input: style => ({ ...style, width: '100%' }),
+                    input: style => ({
+                        ...style,
+                        gridTemplateColumns: '0 minmax(min-content, 1fr)',
+                        width: '100%',
+                    }),
                     /* work around for https://github.com/JedWatson/react-select/issues/3857 */
                     placeholder: style => ({ ...style, pointerEvents: 'none' }),
                 }}
@@ -278,7 +289,7 @@ function buildFeatureGateOptions(search: string) {
     let features: FeatureInfoType[] = [];
     if (search) {
         features = (FEATURES as FeatureInfoType[]).filter(feature =>
-            feature.title.toUpperCase().includes(search.toUpperCase())
+            feature.title.toUpperCase().includes(search.toUpperCase()),
         );
     }
 
@@ -339,6 +350,7 @@ function buildOptions(rawSearch: string, cluster: Cluster, currentEpoch?: bigint
         });
 
         // Parse as BigInt but not if it starts eg 0x or 0b
+        // eslint-disable-next-line no-restricted-syntax -- check for hex/binary prefix to avoid BigInt parsing error
         if (currentEpoch !== undefined && !/^0\w/.test(search) && BigInt(search) <= currentEpoch + 1n) {
             options.push({
                 label: 'Epoch',
@@ -491,11 +503,11 @@ function ClearIndicator({
 
 function buildAppendableSearchOptions(
     searchOptions: PromiseSettledResult<SearchOptions | SearchOptions[] | undefined> | undefined,
-    name: string
+    name: string,
 ): SearchOptions[] {
     if (!searchOptions) return [];
     if (searchOptions.status === 'rejected') {
-        console.error(`Failed to build ${name} options for search: ${searchOptions.reason}`);
+        Logger.error(new Error('Search failed', { cause: searchOptions.reason }), { name });
         return [];
     }
     return searchOptions.value

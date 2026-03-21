@@ -2,6 +2,7 @@ import type { Preview } from '@storybook/react';
 import React, { useEffect } from 'react';
 
 import { Rubik } from 'next/font/google';
+
 import './layout.min.css'; // uncomment this line to see Dashkit styles. TODO: remove upon migrating from Dashkit to Tailwind
 import './dashkit-polyfill.css';
 import '@/app/styles.css';
@@ -17,9 +18,14 @@ const rubikFont = Rubik({
 
 const preview: Preview = {
     parameters: {
+        a11y: {
+            test: 'todo',
+        },
         backgrounds: {
-            values: [{ name: 'Dark', value: '#161a19' }],
-            default: 'Dark',
+            options: {
+                dark: { name: 'Dark', value: '#161a19' },
+                card: { name: 'Card', value: '#1e2423' },
+            },
         },
         controls: {
             matchers: {
@@ -27,7 +33,9 @@ const preview: Preview = {
                 date: /Date$/i,
             },
         },
+        layout: 'padded',
     },
+
     decorators: [
         Story => {
             // Add useEffect to ensure font is properly loaded
@@ -42,6 +50,12 @@ const preview: Preview = {
             );
         },
     ],
+
+    initialGlobals: {
+        backgrounds: {
+            value: 'dark',
+        },
+    },
 };
 
 export default preview;

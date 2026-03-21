@@ -1,7 +1,9 @@
+/* eslint-disable no-restricted-syntax -- test assertions use RegExp for pattern matching */
 import { ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { AddressLookupTableAccount, clusterApiUrl, Connection, TransactionMessage } from '@solana/web3.js';
+import { TransactionMessage } from '@solana/web3.js';
 import { render, screen } from '@testing-library/react';
 
+import { resolveAddressLookupTables } from '@/app/__tests__/mock-resolvers';
 import * as stubs from '@/app/__tests__/mock-stubs';
 import * as mock from '@/app/__tests__/mocks';
 import { ClusterProvider } from '@/app/providers/cluster';
@@ -10,17 +12,12 @@ import { ScrollAnchorProvider } from '@/app/providers/scroll-anchor';
 import { BaseInstructionCard } from '../BaseInstructionCard';
 
 describe('BaseInstructionCard', () => {
-    test('should render "BaseInstructionCard"', async () => {
+    test('should render "BaseInstructionCard"', () => {
         const index = 1;
         const m = mock.deserializeMessageV0(stubs.aTokenCreateIdempotentMsg);
-        const connection = new Connection(clusterApiUrl('mainnet-beta'));
-        const lookups = await Promise.all(
-            m.addressTableLookups.map(lookup =>
-                connection.getAddressLookupTable(lookup.accountKey).then(val => val.value)
-            )
-        );
+        const lookups = resolveAddressLookupTables(m.addressTableLookups);
         const ti = TransactionMessage.decompile(m, {
-            addressLookupTableAccounts: lookups.filter(x => x !== null) as AddressLookupTableAccount[],
+            addressLookupTableAccounts: lookups,
         }).instructions[index];
 
         expect(ti.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)).toBeTruthy();
@@ -31,7 +28,7 @@ describe('BaseInstructionCard', () => {
                 <ClusterProvider>
                     <BaseInstructionCard ix={ti} index={index} title="Program: Instruction" result={{ err: null }} />
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
         // check that card is rendered with proper title
         expect(screen.getByText(/Program: Instruction/)).toBeInTheDocument();
@@ -40,14 +37,9 @@ describe('BaseInstructionCard', () => {
     test('should render "BaseInstructionCard" with raw data', async () => {
         const index = 1;
         const m = mock.deserializeMessageV0(stubs.aTokenCreateIdempotentMsg);
-        const connection = new Connection(clusterApiUrl('mainnet-beta'));
-        const lookups = await Promise.all(
-            m.addressTableLookups.map(lookup =>
-                connection.getAddressLookupTable(lookup.accountKey).then(val => val.value)
-            )
-        );
+        const lookups = resolveAddressLookupTables(m.addressTableLookups);
         const ti = TransactionMessage.decompile(m, {
-            addressLookupTableAccounts: lookups.filter(x => x !== null) as AddressLookupTableAccount[],
+            addressLookupTableAccounts: lookups,
         }).instructions[index];
         expect(ti.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)).toBeTruthy();
 
@@ -63,7 +55,7 @@ describe('BaseInstructionCard', () => {
                         defaultRaw
                     />
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
         // instruction should relate to specific program
         expect(await screen.findAllByText(/Associated Token Program/)).toHaveLength(2);

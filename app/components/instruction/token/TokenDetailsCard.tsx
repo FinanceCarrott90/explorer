@@ -1,9 +1,15 @@
 import { Address } from '@components/common/Address';
 import { useFetchAccountInfo, useMintAccountInfo, useTokenAccountInfo } from '@providers/accounts';
-import { ParsedInstruction, ParsedTransaction, PublicKey, SignatureResult } from '@solana/web3.js';
+import {
+    ParsedInstruction,
+    ParsedTransaction,
+    PublicKey,
+    SignatureResult,
+    TransactionInstruction,
+} from '@solana/web3.js';
 import { normalizeTokenAmount } from '@utils/index';
 import { ParsedInfo } from '@validators/index';
-import React from 'react';
+import React, { ComponentType } from 'react';
 import { create } from 'superstruct';
 import useSWR from 'swr';
 
@@ -15,17 +21,16 @@ import { getTokenInfo, getTokenInfoSwrKey } from '@/app/utils/token-info';
 import { InstructionCard } from '../InstructionCard';
 import { IX_STRUCTS, IX_TITLES, TokenAmountUi, TokenInstructionType } from './types';
 
-type DetailsProps = {
+type TitleInfoLessProps = Omit<InfoProps, 'info' | 'title'>;
+
+type TokenDetailsCardProps<P extends TitleInfoLessProps> = P & {
+    InstructionCardComponent?: ComponentType<any>;
     tx: ParsedTransaction;
-    ix: ParsedInstruction;
-    result: SignatureResult;
-    index: number;
-    innerCards?: JSX.Element[];
-    childIndex?: number;
 };
 
-export function TokenDetailsCard(props: DetailsProps) {
-    const parsed = create(props.ix.parsed, ParsedInfo);
+export function TokenDetailsCard<P extends TitleInfoLessProps>(props: TokenDetailsCardProps<P>) {
+    const parsedData = 'parsed' in props.ix ? props.ix.parsed : {};
+    const parsed = create(parsedData, ParsedInfo);
     const { type: rawType, info } = parsed;
     const type = create(rawType, TokenInstructionType);
     const title = `${TOKEN_IDS[props.ix.programId.toString()]}: ${IX_TITLES[type]}`;
@@ -34,20 +39,30 @@ export function TokenDetailsCard(props: DetailsProps) {
 }
 
 type InfoProps = {
-    ix: ParsedInstruction;
-    info: any;
-    result: SignatureResult;
-    index: number;
-    title: string;
-    innerCards?: JSX.Element[];
     childIndex?: number;
+    index: number;
+    info: any;
+    innerCards?: JSX.Element[];
+    InstructionCardComponent?: ComponentType<any>;
+    ix: TransactionInstruction | ParsedInstruction;
+    result: SignatureResult;
+    title: string;
 };
 
 async function fetchTokenInfo([_, address, cluster, url]: ['get-token-info', string, Cluster, string]) {
     return await getTokenInfo(new PublicKey(address), cluster, url);
 }
 
-function TokenInstruction(props: InfoProps) {
+function TokenInstruction({
+    childIndex,
+    index,
+    innerCards,
+    InstructionCardComponent = InstructionCard,
+    ix,
+    result,
+    title,
+    ...props
+}: InfoProps) {
     const { mintAddress: infoMintAddress, tokenAddress } = React.useMemo(() => {
         let mintAddress: string | undefined;
         let tokenAddress: string | undefined;
@@ -67,8 +82,8 @@ function TokenInstruction(props: InfoProps) {
             tokenAddress,
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
     const tokenInfo = useTokenAccountInfo(tokenAddress);
+
     const mintAddress = infoMintAddress || tokenInfo?.mint.toBase58();
     const mintInfo = useMintAccountInfo(mintAddress);
     const fetchAccountInfo = useFetchAccountInfo();
@@ -88,9 +103,8 @@ function TokenInstruction(props: InfoProps) {
     const { cluster, url } = useCluster();
     const { data: tokenDetails } = useSWR(
         mintAddress ? getTokenInfoSwrKey(mintAddress, cluster, url) : null,
-        fetchTokenInfo
+        fetchTokenInfo,
     );
-
     const attributes: JSX.Element[] = [];
     let decimals = mintInfo?.decimals;
     let tokenSymbol = '';
@@ -110,7 +124,7 @@ function TokenInstruction(props: InfoProps) {
                 <td className="text-lg-end">
                     <Address pubkey={new PublicKey(mintAddress)} alignRight link fetchTokenLabelInfo />
                 </td>
-            </tr>
+            </tr>,
         );
     }
 
@@ -130,7 +144,7 @@ function TokenInstruction(props: InfoProps) {
                         <td className="text-lg-end">
                             <Address pubkey={publicKey} alignRight link />
                         </td>
-                    </tr>
+                    </tr>,
                 );
             }
             continue;
@@ -171,20 +185,21 @@ function TokenInstruction(props: InfoProps) {
             <tr key={key}>
                 <td>{label}</td>
                 <td className="text-lg-end">{tag}</td>
-            </tr>
+            </tr>,
         );
     }
 
     return (
-        <InstructionCard
-            ix={props.ix}
-            index={props.index}
-            result={props.result}
-            title={props.title}
-            innerCards={props.innerCards}
-            childIndex={props.childIndex}
+        <InstructionCardComponent
+            ix={ix}
+            index={index}
+            result={result}
+            title={title}
+            innerCards={innerCards}
+            childIndex={childIndex}
+            {...props} // card may receive additional props
         >
             {attributes}
-        </InstructionCard>
+        </InstructionCardComponent>
     );
 }

@@ -1,7 +1,6 @@
 import { Cluster } from './cluster';
 
 export enum PROGRAM_NAMES {
-
     // native built-ins
     ADDRESS_LOOKUP_TABLE = 'Address Lookup Table Program',
     COMPUTE_BUDGET = 'Compute Budget Program',
@@ -28,6 +27,7 @@ export enum PROGRAM_NAMES {
     TOKEN_2022 = 'Token-2022 Program',
     TOKEN_METADATA = 'Token Metadata Program',
     TOKEN_VAULT = 'Token Vault Program',
+    PROGRAM_METADATA = 'Program Metadata Program',
 
     // foundation programs
     SAS_PROGRAM = 'Solana Attestation Service Program',
@@ -52,14 +52,15 @@ export enum PROGRAM_NAMES {
     NFT_AUCTION = 'NFT Auction Program',
     NFT_CANDY_MACHINE = 'NFT Candy Machine Program',
     NFT_CANDY_MACHINE_V2 = 'NFT Candy Machine Program V2',
+    ORAO_VRF_2 = 'ORAO VRF v2',
     ORCA_SWAP_1 = 'Orca Swap Program v1',
     ORCA_SWAP_2 = 'Orca Swap Program v2',
     ORCA_AQUAFARM = 'Orca Aquafarm Program',
     ORE = 'ORE Program',
     PORT = 'Port Finance Program',
-    PYTH_DEVNET = 'Pyth Oracle Program',
-    PYTH_TESTNET = 'Pyth Oracle Program',
-    PYTH_MAINNET = 'Pyth Oracle Program',
+    PYTH_DEVNET = 'Pyth Oracle Program', // eslint-disable-line @typescript-eslint/no-duplicate-enum-values -- allow to use same name for different enums
+    PYTH_TESTNET = 'Pyth Oracle Program', // eslint-disable-line @typescript-eslint/no-duplicate-enum-values -- allow to use same name for different enums
+    PYTH_MAINNET = 'Pyth Oracle Program', // eslint-disable-line @typescript-eslint/no-duplicate-enum-values -- allow to use same name for different enums
     QUARRY_MERGE_MINE = 'Quarry Merge Mine',
     QUARRY_MINE = 'Quarry Mine',
     QUARRY_MINT_WRAPPER = 'Quarry Mint Wrapper',
@@ -329,6 +330,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
         deployments: [Cluster.MainnetBeta],
         name: PROGRAM_NAMES.PORT,
     },
+    ProgM6JCCvbYkfKqJYHePx4xxSUSqJp7rh8Lyv7nk7S: {
+        deployments: ALL_CLUSTERS,
+        name: PROGRAM_NAMES.PROGRAM_METADATA,
+    },
     QMMD16kjauP5knBwxNUJRZ1Z5o3deBuFrqVjBVmmqto: {
         deployments: LIVE_CLUSTERS,
         name: PROGRAM_NAMES.QUARRY_MERGE_MINE,
@@ -392,6 +397,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb: {
         deployments: ALL_CLUSTERS,
         name: PROGRAM_NAMES.TOKEN_2022,
+    },
+    VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y: {
+        deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+        name: PROGRAM_NAMES.ORAO_VRF_2,
     },
     Vote111111111111111111111111111111111111111: {
         deployments: ALL_CLUSTERS,

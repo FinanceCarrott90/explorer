@@ -1,5 +1,6 @@
 'use client';
 import './styles.css';
+import '@/app/types/bigint'; // polyfill toJSON for BigInt
 
 import { AddressLookupTableAccountSection } from '@components/account/address-lookup-table/AddressLookupTableAccountSection';
 import { isAddressLookupTableAccount } from '@components/account/address-lookup-table/types';
@@ -18,6 +19,8 @@ import { VoteAccountSection } from '@components/account/VoteAccountSection';
 import { ErrorCard } from '@components/common/ErrorCard';
 import { LoadingCard } from '@components/common/LoadingCard';
 import { Header } from '@components/Header';
+import { useAnchorProgram } from '@entities/idl';
+import { SecurityNotification } from '@features/security-txt';
 import {
     Account,
     AccountsProvider,
@@ -28,13 +31,14 @@ import {
     useFetchAccountInfo,
 } from '@providers/accounts';
 import FLAGGED_ACCOUNTS_WARNING from '@providers/accounts/flagged-accounts';
-import { useAnchorProgram } from '@providers/anchor';
 import { CacheEntry, FetchStatus } from '@providers/cache';
 import { useCluster } from '@providers/cluster';
+import { cn } from '@shared/utils';
+import { Address } from '@solana/kit';
 import { PROGRAM_ID as ACCOUNT_COMPRESSION_ID } from '@solana/spl-account-compression';
 import { PublicKey } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ADDRESS } from '@solana-program/token-2022';
-import { Cluster, ClusterStatus } from '@utils/cluster';
+import { ClusterStatus } from '@utils/cluster';
 import { FEATURE_PROGRAM_ID } from '@utils/parseFeatureAccount';
 import { useClusterPath } from '@utils/url';
 import Link from 'next/link';
@@ -43,14 +47,20 @@ import React, { PropsWithChildren, Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { SOLANA_ATTESTATION_SERVICE_PROGRAM_ADDRESS as SAS_PROGRAM_ID } from 'sas-lib';
 import useSWRImmutable from 'swr/immutable';
-import { Address } from 'web3js-experimental';
 
 import { CompressedNftCard } from '@/app/components/account/CompressedNftCard';
 import { SolanaAttestationServiceCard } from '@/app/components/account/sas/SolanaAttestationCard';
+import { hasTokenMetadata } from '@/app/features/metadata';
 import { useCompressedNft } from '@/app/providers/compressed-nft';
 import { useSquadsMultisigLookup } from '@/app/providers/squadsMultisig';
+import { isAttestationAccount } from '@/app/utils/attestation-service';
 import { getFeatureInfo, useFeatureInfo } from '@/app/utils/feature-gate/utils';
-import { FullTokenInfo, getFullTokenInfo } from '@/app/utils/token-info';
+import {
+    fetchFullTokenInfo,
+    FullTokenInfo,
+    getFullTokenInfoSwrKey,
+    isRedactedTokenAddress,
+} from '@/app/utils/token-info';
 
 const TABS_LOOKUP: { [id: string]: Tab[] } = {
     'address-lookup-table': [
@@ -58,6 +68,13 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
             path: 'entries',
             slug: 'entries',
             title: 'Table Entries',
+        },
+    ],
+    attestation: [
+        {
+            path: 'attestation',
+            slug: 'attestation',
+            title: 'Attestation Service',
         },
     ],
     'bpf-upgradeable-loader': [
@@ -180,13 +197,9 @@ const TOKEN_TABS_HIDDEN = ['spl-token:mint', 'spl-token-2022:mint', 'config', 'v
 
 type Props = PropsWithChildren<{ params: { address: string } }>;
 
-async function fetchFullTokenInfo([_, pubkey, cluster, url]: ['get-full-token-info', string, Cluster, string]) {
-    return await getFullTokenInfo(new PublicKey(pubkey), cluster, url);
-}
-
 function AddressLayoutInner({ children, params: { address } }: Props) {
     const fetchAccount = useFetchAccountInfo();
-    const { status, cluster, url } = useCluster();
+    const { status, cluster, url, clusterInfo } = useCluster();
     const info = useAccountInfo(address);
 
     let pubkey: PublicKey | undefined;
@@ -200,12 +213,15 @@ function AddressLayoutInner({ children, params: { address } }: Props) {
     const infoStatus = info?.status;
     const infoParsed = info?.data?.data.parsed;
 
+    const shouldFetchTokenInfo =
+        infoStatus === FetchStatus.Fetched && infoParsed && isTokenProgramData(infoParsed) && pubkey;
     const { data: fullTokenInfo, isLoading: isFullTokenInfoLoading } = useSWRImmutable(
-        infoStatus === FetchStatus.Fetched && infoParsed && isTokenProgramData(infoParsed) && pubkey
-            ? ['get-full-token-info', address, cluster, url]
-            : null,
-        fetchFullTokenInfo
+        shouldFetchTokenInfo ? getFullTokenInfoSwrKey(address, cluster, url, clusterInfo?.genesisHash) : null,
+        fetchFullTokenInfo,
     );
+
+    const isAccountLoading = !info || info.status === FetchStatus.Fetching;
+    const isTokenInfoLoading = isAccountLoading || isFullTokenInfoLoading;
 
     // Fetch account on load
     React.useEffect(() => {
@@ -220,7 +236,7 @@ function AddressLayoutInner({ children, params: { address } }: Props) {
                 address={address}
                 account={info?.data}
                 tokenInfo={fullTokenInfo}
-                isTokenInfoLoading={isFullTokenInfoLoading}
+                isTokenInfoLoading={isTokenInfoLoading}
             />
             {!pubkey ? (
                 <ErrorCard text={`Address "${address}" is not valid`} />
@@ -229,7 +245,8 @@ function AddressLayoutInner({ children, params: { address } }: Props) {
                     info={info}
                     pubkey={pubkey}
                     tokenInfo={fullTokenInfo}
-                    isTokenInfoLoading={isFullTokenInfoLoading}
+                    isTokenInfoLoading={isTokenInfoLoading}
+                    notification={<SecurityNotification parsedData={infoParsed} address={address} />}
                 >
                     {children}
                 </DetailsSections>
@@ -253,8 +270,10 @@ function DetailsSections({
     info,
     tokenInfo,
     isTokenInfoLoading,
+    notification,
 }: {
     children: React.ReactNode;
+    notification: React.ReactNode;
     pubkey: PublicKey;
     tab?: string;
     info?: CacheEntry<Account>;
@@ -281,6 +300,7 @@ function DetailsSections({
         <>
             {FLAGGED_ACCOUNTS_WARNING[address] ?? null}
             <InfoSection account={account} tokenInfo={tokenInfo} />
+            {notification}
             <MoreSection tabs={tabComponents.map(({ component }) => component)}>{children}</MoreSection>
         </>
     );
@@ -372,7 +392,7 @@ export type MoreTabs =
     | 'attributes'
     | 'domains'
     | 'security'
-    | 'anchor-program'
+    | 'idl'
     | 'anchor-account'
     | 'entries'
     | 'concurrent-merkle-tree'
@@ -380,7 +400,8 @@ export type MoreTabs =
     | 'verified-build'
     | 'program-multisig'
     | 'feature-gate'
-    | 'token-extensions';
+    | 'token-extensions'
+    | 'attestation';
 
 function MoreSection({ children, tabs }: { children: React.ReactNode; tabs: (JSX.Element | null)[] }) {
     return (
@@ -435,6 +456,14 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
         tabs.push(...TABS_LOOKUP[`${programTypeKey}:metaplexNFT`]);
     }
 
+    if (hasTokenMetadata(parsedData)) {
+        tabs.push({
+            path: 'metadata',
+            slug: 'metadata',
+            title: 'Metadata',
+        });
+    }
+
     // Compressed NFT tabs
     if ((!account.data.raw || account.data.raw.length === 0) && !account.data.parsed) {
         tabs.push(
@@ -450,7 +479,7 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
                 slug: 'attributes',
                 title: 'Attributes',
             },
-            { compressed: true, path: 'compression', slug: 'compression', title: 'Compression' }
+            { compressed: true, path: 'compression', slug: 'compression', title: 'Compression' },
         );
     }
 
@@ -486,6 +515,17 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
         tabs.push(TABS_LOOKUP['spl-account-compression'][0]);
     }
 
+    if (isAttestationAccount(account)) {
+        tabs.push(...TABS_LOOKUP['attestation']);
+    }
+
+    if (isRedactedTokenAddress(address)) {
+        const metadataIndex = tabs.findIndex(tab => tab.slug === 'metadata');
+        if (metadataIndex !== -1) {
+            tabs.splice(metadataIndex, 1);
+        }
+    }
+
     return tabs.map(tab => {
         return {
             component: !tab.compressed ? (
@@ -506,7 +546,7 @@ function Tab({ address, path, title }: { address: string; path: string; title: s
     const isActive = (selectedLayoutSegment === null && path === '') || selectedLayoutSegment === path;
     return (
         <li className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={tabPath} scroll={false}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={tabPath} scroll={false}>
                 {title}
             </Link>
         </li>
@@ -543,23 +583,23 @@ function getCustomLinkedTabs(pubkey: PublicKey, account: Account) {
             title: 'Extensions',
         };
         tabComponents.push({
-            component: <TokenExtensionsLink tab={extensionsTab} address={pubkey.toString()} />,
+            component: <TokenExtensionsLink key={extensionsTab.slug} tab={extensionsTab} address={pubkey.toString()} />,
             tab: extensionsTab,
         });
     }
 
-    const anchorProgramTab: Tab = {
-        path: 'anchor-program',
-        slug: 'anchor-program',
-        title: 'Anchor Program IDL',
+    const idlProgramTab: Tab = {
+        path: 'idl',
+        slug: 'idl',
+        title: 'Program IDL',
     };
     tabComponents.push({
         component: (
-            <React.Suspense key={anchorProgramTab.slug} fallback={<></>}>
-                <AnchorProgramIdlLink tab={anchorProgramTab} address={pubkey.toString()} pubkey={pubkey} />
+            <React.Suspense key={idlProgramTab.slug} fallback={<></>}>
+                <ProgramIdlLink tab={idlProgramTab} address={pubkey.toString()} account={account} />
             </React.Suspense>
         ),
-        tab: anchorProgramTab,
+        tab: idlProgramTab,
     });
 
     const accountDataTab: Tab = {
@@ -592,19 +632,18 @@ function getCustomLinkedTabs(pubkey: PublicKey, account: Account) {
     return tabComponents;
 }
 
-function AnchorProgramIdlLink({ tab, address, pubkey }: { tab: Tab; address: string; pubkey: PublicKey }) {
-    const { url, cluster } = useCluster();
-    const { idl } = useAnchorProgram(pubkey.toString(), url, cluster);
+function ProgramIdlLink({ tab, address, account }: { tab: Tab; address: string; account: Account }) {
     const anchorProgramPath = useClusterPath({ pathname: `/address/${address}/${tab.path}` });
     const selectedLayoutSegment = useSelectedLayoutSegment();
     const isActive = selectedLayoutSegment === tab.path;
-    if (!idl) {
+
+    if (!account.executable) {
         return null;
     }
 
     return (
         <li key={tab.slug} className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={anchorProgramPath}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={anchorProgramPath}>
                 {tab.title}
             </Link>
         </li>
@@ -623,7 +662,7 @@ function AccountDataLink({ address, tab, programId }: { address: string; tab: Ta
 
     return (
         <li key={tab.slug} className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={accountDataPath}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={accountDataPath}>
                 {tab.title}
             </Link>
         </li>
@@ -642,7 +681,7 @@ function FeatureGateLink({ address, tab }: { address: string; tab: Tab }) {
 
     return (
         <li key={tab.slug} className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={accountDataPath}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={accountDataPath}>
                 {tab.title}
             </Link>
         </li>
@@ -664,7 +703,7 @@ function CompressedNftLink({ tab, address, pubkey }: { tab: Tab; address: string
 
     return (
         <li key={tab.slug} className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={tabPath}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={tabPath}>
                 {tab.title}
             </Link>
         </li>
@@ -692,7 +731,7 @@ function ProgramMultisigLink({
 
     return (
         <li key={tab.slug} className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={tabPath}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={tabPath}>
                 {tab.title}
             </Link>
         </li>
@@ -706,7 +745,7 @@ function TokenExtensionsLink({ address, tab }: { address: string; tab: Tab }) {
 
     return (
         <li key={tab.slug} className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={accountDataPath}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={accountDataPath}>
                 {tab.title}
             </Link>
         </li>

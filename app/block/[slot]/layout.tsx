@@ -3,23 +3,26 @@
 import { Address } from '@components/common/Address';
 import { Epoch } from '@components/common/Epoch';
 import { ErrorCard } from '@components/common/ErrorCard';
+import { ExternalLinkWarning } from '@components/common/ExternalLinkWarning';
 import { LoadingCard } from '@components/common/LoadingCard';
 import { Slot } from '@components/common/Slot';
 import { TableCardBody } from '@components/common/TableCardBody';
 import { BlockProvider, FetchStatus, useBlock, useFetchBlock } from '@providers/block';
 import { useCluster } from '@providers/cluster';
+import { cn } from '@shared/utils';
 import { ClusterStatus } from '@utils/cluster';
 import { displayTimestamp, displayTimestampUtc } from '@utils/date';
+import { IBRL_EXPLORER_URL } from '@utils/env';
 import { useClusterPath } from '@utils/url';
 import Link from 'next/link';
 import { notFound, useSelectedLayoutSegment } from 'next/navigation';
 import React, { PropsWithChildren } from 'react';
+import { ExternalLink } from 'react-feather';
 
-import { getEpochForSlot } from '@/app/utils/epoch-schedule';
+import { estimateRequestedComputeUnits } from '@/app/utils/compute-units-schedule';
+import { getEpochForSlot, getMaxComputeUnitsInBlock } from '@/app/utils/epoch-schedule';
 
 type Props = PropsWithChildren<{ params: { slot: string } }>;
-
-const MAX_CU_PER_BLOCK = 50_000_000;
 
 function BlockLayoutInner({ children, params: { slot } }: Props) {
     const slotNumber = Number(slot);
@@ -28,7 +31,7 @@ function BlockLayoutInner({ children, params: { slot } }: Props) {
     }
     const confirmedBlock = useBlock(slotNumber);
     const fetchBlock = useFetchBlock();
-    const { clusterInfo, status } = useCluster();
+    const { clusterInfo, status, cluster } = useCluster();
     const refresh = () => fetchBlock(slotNumber);
 
     // Fetch block on load
@@ -45,24 +48,37 @@ function BlockLayoutInner({ children, params: { slot } }: Props) {
         content = <ErrorCard retry={refresh} text={`Block ${slotNumber} was not found`} />;
     } else {
         const { block, blockLeader, childSlot, childLeader, parentLeader } = confirmedBlock.data;
-        let successfulCUs = 0;
+        const epoch = clusterInfo ? getEpochForSlot(clusterInfo.epochSchedule, BigInt(slotNumber)) : undefined;
+
         let totalCUs = 0;
+        let totalRequestedCUs = 0;
+        let totalCostUnits = 0;
         for (const tx of block.transactions) {
+            const requestedCUs = estimateRequestedComputeUnits(tx, epoch, cluster);
             const cus = tx.meta?.computeUnitsConsumed ?? 0;
-            if (tx.meta?.err === null) {
-                successfulCUs += cus;
-            }
+            const costUnits = tx.meta?.costUnits ?? 0;
+            totalRequestedCUs += requestedCUs;
             totalCUs += cus;
+            totalCostUnits += costUnits;
         }
+
         const showSuccessfulCount = block.transactions.every(tx => tx.meta !== null);
         const successfulTxs = block.transactions.filter(tx => tx.meta?.err === null);
-        const epoch = clusterInfo ? getEpochForSlot(clusterInfo.epochSchedule, BigInt(slotNumber)) : undefined;
+        const maxComputeUnits = getMaxComputeUnitsInBlock({ cluster, epoch });
 
         content = (
             <>
                 <div className="card">
-                    <div className="card-header">
-                        <h3 className="card-header-title mb-0 d-flex align-items-center">Overview</h3>
+                    <div className="card-header align-items-center">
+                        <h3 className="card-header-title">Overview</h3>
+                        {IBRL_EXPLORER_URL && (
+                            <ExternalLinkWarning href={`${IBRL_EXPLORER_URL}/block/${slotNumber}`}>
+                                <>
+                                    <ExternalLink className="e-me-2 e-align-text-top" size={13} />
+                                    IBRL Explorer
+                                </>
+                            </ExternalLinkWarning>
+                        )}
                     </div>
                     <TableCardBody>
                         <tr>
@@ -169,20 +185,26 @@ function BlockLayoutInner({ children, params: { slot } }: Props) {
                             </tr>
                         )}
                         <tr>
-                            <td className="w-100">Compute Unit Utilization</td>
+                            <td className="w-100">Total Compute Units Consumed</td>
+                            <td className="text-lg-end font-monospace">
+                                <span>{totalCUs.toLocaleString()}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td className="w-100">Transaction Cost Utilization</td>
                             <td className="text-lg-end font-monospace">
                                 <span>
-                                    {totalCUs.toLocaleString()} / {MAX_CU_PER_BLOCK.toLocaleString()} (
-                                    {Math.round((totalCUs / MAX_CU_PER_BLOCK) * 100)}%)
+                                    {totalCostUnits.toLocaleString()} / {maxComputeUnits.toLocaleString()} (
+                                    {Math.round((totalCostUnits / maxComputeUnits) * 100)}%)
                                 </span>
                             </td>
                         </tr>
                         <tr>
-                            <td className="w-100">Successful Compute Unit Utilization</td>
+                            <td className="w-100">Reserved Compute Units</td>
                             <td className="text-lg-end font-monospace">
                                 <span>
-                                    {successfulCUs.toLocaleString()} / {MAX_CU_PER_BLOCK.toLocaleString()} (
-                                    {Math.round((successfulCUs / MAX_CU_PER_BLOCK) * 100)}%)
+                                    {totalRequestedCUs.toLocaleString()} / {maxComputeUnits.toLocaleString()} (
+                                    {Math.round((totalRequestedCUs / maxComputeUnits) * 100)}%)
                                 </span>
                             </td>
                         </tr>
@@ -269,7 +291,7 @@ function TabLink({ path, slot, title }: { path: string; slot: number; title: str
     const isActive = (selectedLayoutSegment === null && path === '') || selectedLayoutSegment === path;
     return (
         <li className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={tabPath} scroll={false}>
+            <Link className={cn(isActive && 'active', 'nav-link')} href={tabPath} scroll={false}>
                 {title}
             </Link>
         </li>

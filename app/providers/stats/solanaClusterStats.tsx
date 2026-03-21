@@ -1,10 +1,12 @@
 'use client';
 
 import { useCluster } from '@providers/cluster';
+import { createSolanaRpc } from '@solana/kit';
 import { Cluster } from '@utils/cluster';
 import useTabVisibility from '@utils/use-tab-visibility';
 import React from 'react';
-import { createSolanaRpc } from 'web3js-experimental';
+
+import { Logger } from '@/app/shared/lib/logger';
 
 import { DashboardInfo, DashboardInfoActionType, dashboardInfoReducer, EpochInfo } from './solanaDashboardInfo';
 import {
@@ -29,7 +31,7 @@ export enum ClusterStatsStatus {
 }
 
 const initialPerformanceInfo: PerformanceInfo = {
-    avgTps: 0,
+    avgTps: null,
     historyMaxTps: 0,
     perfHistory: {
         long: [],
@@ -114,7 +116,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
                 });
             } catch (error) {
                 if (cluster !== Cluster.Custom) {
-                    console.error(error, { url });
+                    Logger.error(error, { url });
                 }
                 if (error instanceof Error) {
                     dispatchPerformanceInfo({
@@ -142,7 +144,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
                 });
             } catch (error) {
                 if (cluster !== Cluster.Custom) {
-                    console.error(error, { url });
+                    Logger.error(error, { url });
                 }
                 if (error instanceof Error) {
                     dispatchPerformanceInfo({
@@ -176,7 +178,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
                 });
             } catch (error) {
                 if (cluster !== Cluster.Custom) {
-                    console.error(error, { url });
+                    Logger.error(error, { url });
                 }
                 if (error instanceof Error) {
                     dispatchDashboardInfo({
@@ -257,7 +259,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
             data: 'Cluster stats timed out',
             type: PerformanceInfoActionType.SetError,
         });
-        console.error('Cluster stats timed out');
+        Logger.error(new Error('[providers:cluster-stats] Cluster stats timed out'));
         setActive(false);
     }, []);
 

@@ -1,15 +1,27 @@
 import './scss/theme-dark.scss';
+import './styles.css';
 
 import { ClusterModal } from '@components/ClusterModal';
 import { ClusterStatusButton } from '@components/ClusterStatusButton';
+import { Footer } from '@components/Footer';
 import { MessageBanner } from '@components/MessageBanner';
 import { Navbar } from '@components/Navbar';
 import { ClusterProvider } from '@providers/cluster';
 import { ScrollAnchorProvider } from '@providers/scroll-anchor';
+import { Toaster } from '@shared/ui/sonner/toaster';
+import { isEnvEnabled } from '@utils/env';
+import { BotIdClient } from 'botid/client';
 import type { Viewport } from 'next';
 import dynamic from 'next/dynamic';
 import { Rubik } from 'next/font/google';
 import { Metadata } from 'next/types';
+
+import { TokenInfoBatchProvider } from '@/app/entities/token-info';
+import { CookieConsent } from '@/app/features/cookie';
+import { VisibilityProvider } from '@/app/shared/lib/visibility';
+
+import { botIdProtectedRoutes } from '../middleware';
+
 const SearchBar = dynamic(() => import('@components/SearchBar'), {
     ssr: false,
 });
@@ -33,40 +45,46 @@ const rubikFont = Rubik({
     weight: ['300', '400', '700'],
 });
 
-export default function RootLayout({
-    analytics,
-    children,
-}: {
-    analytics?: React.ReactNode;
-    children: React.ReactNode;
-}) {
+export default function RootLayout({ analytics, children }: { analytics: React.ReactNode; children: React.ReactNode }) {
     return (
         <html lang="en" className={`${rubikFont.variable}`}>
             <head>
                 <link rel="icon" href="/favicon.png" type="image/png" />
                 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
                 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+                <BotIdClient
+                    protect={isEnvEnabled(process.env.NEXT_PUBLIC_BOTID_ENABLED) ? botIdProtectedRoutes : []}
+                />
             </head>
             <body>
                 <ScrollAnchorProvider>
                     <ClusterProvider>
-                        <ClusterModal />
-                        <div className="main-content pb-4">
-                            <Navbar>
-                                <SearchBar />
-                            </Navbar>
-                            <MessageBanner />
-                            <div className="container my-3 d-lg-none">
-                                <SearchBar />
-                            </div>
-                            <div className="container my-3 d-lg-none">
-                                <ClusterStatusButton />
-                            </div>
-                            {children}
-                        </div>
+                        <VisibilityProvider>
+                            <TokenInfoBatchProvider>
+                                <ClusterModal />
+                                <div className="e-flex e-min-h-screen e-flex-col">
+                                    <div className="main-content pb-4 e-flex-1">
+                                        <Navbar>
+                                            <SearchBar />
+                                        </Navbar>
+                                        <MessageBanner />
+                                        <div className="container my-3 d-xl-none">
+                                            <SearchBar />
+                                        </div>
+                                        <div className="container my-3 d-lg-none">
+                                            <ClusterStatusButton />
+                                        </div>
+                                        {children}
+                                    </div>
+                                    <Footer />
+                                </div>
+                                <Toaster position="bottom-center" toastOptions={{ duration: 5_000 }} />
+                            </TokenInfoBatchProvider>
+                        </VisibilityProvider>
                     </ClusterProvider>
                 </ScrollAnchorProvider>
                 {analytics}
+                <CookieConsent />
             </body>
         </html>
     );

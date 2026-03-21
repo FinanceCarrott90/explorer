@@ -1,4 +1,5 @@
 import { PublicKey } from '@solana/web3.js';
+import { useClusterPath } from '@utils/url';
 import Link from 'next/link';
 
 import { Address } from '@/app/components/common/Address';
@@ -11,6 +12,7 @@ import { FeatureInfoType } from './types';
 
 export function UpcomingFeatures() {
     const { cluster } = useCluster();
+    const featureGatesPath = useClusterPath({ pathname: '/feature-gates' });
 
     // Don't show anything for localnet
     if (cluster === Cluster.Custom) {
@@ -50,10 +52,16 @@ export function UpcomingFeatures() {
     return (
         <FeaturesTable
             header={
-                <>
-                    <span className="me-2">🚀</span>
-                    Upcoming {clusterName(cluster)} Features
-                </>
+                <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span className="me-2">🚀</span>
+                        Upcoming {clusterName(cluster)} Features
+                    </div>
+
+                    <Link href={featureGatesPath} className="epoch-link mb-1">
+                        View all feature gates
+                    </Link>
+                </div>
             }
             features={filteredFeatures.filter(feature => !feature.mainnet_activation_epoch)}
             cluster={cluster}
@@ -139,16 +147,18 @@ function FeaturesTable({
                                     />
                                 </td>
                                 <td>
-                                    {feature.simds[0] && feature.simd_link[0] && (
+                                    {feature.simds.map((simd, index) => (
                                         <a
-                                            href={feature.simd_link[0]}
+                                            key={index}
+                                            href={feature.simd_link[index]}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="btn btn-sm btn-outline-primary fs-sm"
                                         >
-                                            SIMD {feature.simds[0].replace(/^0+/, '')}
+                                            {/* eslint-disable-next-line no-restricted-syntax -- strip leading zeros from SIMD number */}
+                                            SIMD {simd.replace(/^0+/, '')}
                                         </a>
-                                    )}
+                                    ))}
                                 </td>
                             </tr>
                         ))}

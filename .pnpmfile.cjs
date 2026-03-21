@@ -22,14 +22,14 @@ function overridesPeerDependencies(pkg) {
     if (pkg.peerDependencies) {
         remapPeerDependencies.map(dep => {
             if (pkg.name === dep.package && pkg.version.startsWith(dep.packageVersion)) {
-                console.log(`  - Checking ${pkg.name}@${pkg.version}`); // , pkg.peerDependencies);
+                console.log(`  - Checking ${pkg.name}@${pkg.version}`);
 
                 if (dep.peerDependency in pkg.peerDependencies) {
                     try {
                         console.log(
                             `    - Overriding ${pkg.name}@${pkg.version} peerDependency ${dep.peerDependency}@${
                                 pkg.peerDependencies[dep.peerDependency]
-                            }`
+                            }`,
                         );
 
                         // First add a new dependency to the package and then remove the peer dependency.
@@ -40,7 +40,7 @@ function overridesPeerDependencies(pkg) {
                         console.log(
                             `      - Overrode ${pkg.name}@${pkg.version} peerDependency ${dep.peerDependency}@${
                                 pkg.dependencies[dep.peerDependency]
-                            }`
+                            }`,
                         );
                     } catch (err) {
                         console.error(err);

@@ -34,6 +34,7 @@ import React from 'react';
 import { create } from 'superstruct';
 
 import { getProxiedUri } from '@/app/features/metadata/utils';
+import { Logger } from '@/app/shared/lib/logger';
 
 import { HistoryProvider } from './history';
 import { RewardsProvider } from './rewards';
@@ -54,6 +55,10 @@ export type UpgradeableLoaderAccountData = {
     parsed: UpgradeableLoaderAccount;
     programData?: ProgramDataAccountInfo;
 };
+
+export function isUpgradeableLoaderAccountData(data: { program: string }): data is UpgradeableLoaderAccountData {
+    return data.program === 'bpf-upgradeable-loader';
+}
 
 export type NFTData = {
     metadata: programs.metadata.MetadataData;
@@ -124,13 +129,18 @@ export interface Account {
     data: AccountData;
 }
 
-type State = Cache.State<Account>;
-type Dispatch = Cache.Dispatch<Account>;
+/**
+ * Contexts and State exported for mocking purposes only (e.g., Storybook stories).
+ * Do not use these directly in application code - use the provided hooks instead.
+ * @see .storybook/__mocks__/MockAccountsProvider.tsx
+ */
+export type State = Cache.State<Account>;
+export type Dispatch = Cache.Dispatch<Account>;
 type Fetchers = { [mode in FetchAccountDataMode]: MultipleAccountFetcher };
 
-const FetchersContext = React.createContext<Fetchers | undefined>(undefined);
-const StateContext = React.createContext<State | undefined>(undefined);
-const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
+export const FetchersContext = React.createContext<Fetchers | undefined>(undefined);
+export const StateContext = React.createContext<State | undefined>(undefined);
+export const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
 class MultipleAccountFetcher {
     pubkeys: Set<string> = new Set();
@@ -140,7 +150,7 @@ class MultipleAccountFetcher {
         private dispatch: Dispatch,
         private cluster: Cluster,
         private url: string,
-        private dataMode: FetchAccountDataMode
+        private dataMode: FetchAccountDataMode,
     ) {}
     fetch = (pubkey: PublicKey) => {
         if (this.pubkeys !== undefined) this.pubkeys.add(pubkey.toBase58());
@@ -261,7 +271,10 @@ async function fetchMultipleAccounts({
                         try {
                             parsedData = await handleParsedAccountData(connection, pubkey, accountData);
                         } catch (error) {
-                            console.error(error, { address: pubkey.toBase58(), url });
+                            Logger.error(error, {
+                                address: pubkey.toBase58(),
+                                url,
+                            });
                         }
                     }
 
@@ -296,7 +309,7 @@ async function fetchMultipleAccounts({
             }
         } catch (error) {
             if (cluster !== Cluster.Custom) {
-                console.error(error, { url });
+                Logger.error(error, { url });
             }
 
             for (const pubkey of batch) {
@@ -314,7 +327,7 @@ async function fetchMultipleAccounts({
 async function handleParsedAccountData(
     connection: Connection,
     accountKey: PublicKey,
-    accountData: ParsedAccountData
+    accountData: ParsedAccountData,
 ): Promise<ParsedData | undefined> {
     const info = create(accountData.parsed, ParsedInfo);
     switch (accountData.program) {
@@ -427,11 +440,12 @@ async function handleParsedAccountData(
     }
 }
 
+// eslint-disable-next-line no-restricted-syntax -- match image data URI mime types
 const IMAGE_MIME_TYPE_REGEX = /data:image\/(svg\+xml|png|jpeg|gif)/g;
 
 const getMetaDataJSON = async (
     id: string,
-    metadata: programs.metadata.MetadataData
+    metadata: programs.metadata.MetadataData,
 ): Promise<MetadataJson | undefined> => {
     return new Promise(resolve => {
         const uri = metadata.data.uri;
@@ -471,7 +485,7 @@ const getMetaDataJSON = async (
                     resolve(undefined);
                 });
         } catch (ex) {
-            console.error(ex);
+            Logger.error(ex);
             resolve(undefined);
         }
     });
@@ -518,7 +532,7 @@ export function useMintAccountInfo(address: string | undefined): MintAccountInfo
 
             return create(parsedData.parsed.info, MintAccountInfo);
         } catch (err) {
-            console.error(err, { address });
+            Logger.error(err, { address });
         }
     }, [address, accountInfo]);
 }
@@ -538,14 +552,14 @@ export function useTokenAccountInfo(address: string | undefined): TokenAccountIn
 
             return create(parsedData.parsed.info, TokenAccountInfo);
         } catch (err) {
-            console.error(err, { address });
+            Logger.error(err, { address });
         }
     }, [address, accountInfo]);
 }
 
 function parseAddressLookupTableFromCache(
     accountInfo: Cache.CacheEntry<Account> | undefined,
-    address: string
+    address: string,
 ): [AddressLookupTableAccount | string | undefined, FetchStatus] | undefined {
     if (accountInfo === undefined) return;
     const account = accountInfo.data;
@@ -587,13 +601,13 @@ export function useAddressLookupTables(addresses: string[]) {
     const accountInfos = useAccountInfos(addresses);
     return React.useMemo(() => {
         return accountInfos.map((accountInfo, index) =>
-            parseAddressLookupTableFromCache(accountInfo, addresses[index])
+            parseAddressLookupTableFromCache(accountInfo, addresses[index]),
         );
     }, [accountInfos, addresses]);
 }
 
 export function useAddressLookupTable(
-    address: string
+    address: string,
 ): [AddressLookupTableAccount | string | undefined, FetchStatus] | undefined {
     const accountInfo = useAccountInfo(address);
     return React.useMemo(() => parseAddressLookupTableFromCache(accountInfo, address), [address, accountInfo]);
@@ -609,6 +623,6 @@ export function useFetchAccountInfo() {
         (pubkey: PublicKey, dataMode: FetchAccountDataMode) => {
             fetchers[dataMode].fetch(pubkey);
         },
-        [fetchers]
+        [fetchers],
     );
 }

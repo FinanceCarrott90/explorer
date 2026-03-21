@@ -1,9 +1,8 @@
 import { parseInstruction } from '@codama/dynamic-parsers';
+import { isSignerRole, isWritableRole } from '@solana/kit';
 import { PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { SignatureResult } from '@solana/web3.js';
 import React from 'react';
-import { isWritableRole } from 'web3js-experimental';
-import { isSignerRole } from 'web3js-experimental';
 
 import { Address } from '../../common/Address';
 import { InstructionCard } from '../InstructionCard';
@@ -57,7 +56,7 @@ export function CodamaInstructionCard({
                 <td className="text-lg-end" colSpan={2}>
                     <Address pubkey={new PublicKey(account.address)} alignRight link />
                 </td>
-            </tr>
+            </tr>,
         );
     }
 

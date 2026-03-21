@@ -3,6 +3,7 @@ import { ErrorCard } from '@components/common/ErrorCard';
 import { Signature } from '@components/common/Signature';
 import { SolBalance } from '@components/common/SolBalance';
 import { useCluster } from '@providers/cluster';
+import { cn } from '@shared/utils';
 import {
     ConfirmedTransactionMeta,
     PublicKey,
@@ -18,6 +19,8 @@ import { ReadonlyURLSearchParams, usePathname, useRouter, useSearchParams } from
 import React, { createRef, useMemo } from 'react';
 import { ChevronDown } from 'react-feather';
 import useAsyncEffect from 'use-async-effect';
+
+import { estimateRequestedComputeUnits } from '@/app/utils/compute-units-schedule';
 
 const PAGE_SIZE = 25;
 
@@ -38,11 +41,13 @@ const useQueryAccountFilter = (query: ReadonlyURLSearchParams): PublicKey | null
     return null;
 };
 
-type SortMode = 'index' | 'compute' | 'fee';
+type SortMode = 'index' | 'compute' | 'txnCost' | 'fee' | 'reservedCUs';
 const useQuerySort = (query: ReadonlyURLSearchParams): SortMode => {
     const sort = query.get('sort');
     if (sort === 'compute') return 'compute';
+    if (sort === 'txnCost') return 'txnCost';
     if (sort === 'fee') return 'fee';
+    if (sort === 'reservedCUs') return 'reservedCUs';
     return 'index';
 };
 
@@ -52,10 +57,12 @@ type TransactionWithInvocations = {
     meta: ConfirmedTransactionMeta | null;
     invocations: Map<string, number>;
     computeUnits?: number;
+    costUnits?: number;
+    reservedComputeUnits?: number;
     logTruncated: boolean;
 };
 
-export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
+export function BlockHistoryCard({ block, epoch }: { block: VersionedBlockResponse; epoch: bigint | undefined }) {
     const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
     const currentPathname = usePathname();
     const currentSearchParams = useSearchParams();
@@ -79,7 +86,7 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                 .concat(
                     tx.meta?.innerInstructions?.flatMap(ix => {
                         return ix.instructions.map(ix => ix.programIdIndex);
-                    }) || []
+                    }) || [],
                 );
 
             const indexMap = new Map<number, number>();
@@ -110,17 +117,29 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                 // ignore parsing errors because some old logs aren't parsable
             }
 
+            let costUnits: number | undefined = undefined;
+            try {
+                costUnits = tx.meta?.costUnits ?? 0;
+            } catch (err) {
+                // ignore parsing errors because some old logs aren't parsable
+            }
+
+            // Calculate reserved compute units
+            const reservedComputeUnits = estimateRequestedComputeUnits(tx, epoch, cluster);
+
             return {
                 computeUnits,
+                costUnits,
                 index,
                 invocations,
                 logTruncated,
                 meta: tx.meta,
+                reservedComputeUnits,
                 signature,
             };
         });
         return { invokedPrograms, transactions };
-    }, [block, cluster]);
+    }, [block, cluster, epoch]);
 
     const [filteredTransactions, showComputeUnits] = React.useMemo((): [TransactionWithInvocations[], boolean] => {
         const voteFilter = VOTE_PROGRAM_ID.toBase58();
@@ -153,8 +172,12 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
 
         if (sortMode === 'compute' && showComputeUnits) {
             filteredTxs.sort((a, b) => b.computeUnits! - a.computeUnits!);
+        } else if (sortMode === 'txnCost') {
+            filteredTxs.sort((a, b) => b.costUnits! - a.costUnits!);
         } else if (sortMode === 'fee') {
             filteredTxs.sort((a, b) => (b.meta?.fee || 0) - (a.meta?.fee || 0));
+        } else if (sortMode === 'reservedCUs') {
+            filteredTxs.sort((a, b) => (b.reservedComputeUnits || 0) - (a.reservedComputeUnits || 0));
         }
 
         return [filteredTxs, showComputeUnits];
@@ -208,7 +231,7 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                                         const additionalParams = new URLSearchParams(currentSearchParams?.toString());
                                         additionalParams.delete('sort');
                                         router.push(
-                                            pickClusterParams(currentPathname, currentSearchParams, additionalParams)
+                                            pickClusterParams(currentPathname, currentSearchParams, additionalParams),
                                         );
                                     }}
                                 >
@@ -217,37 +240,61 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                                 <th className="text-muted">Result</th>
                                 <th className="text-muted">Transaction Signature</th>
                                 <th
-                                    className="text-muted text-end c-pointer"
+                                    className="text-muted c-pointer"
                                     onClick={() => {
                                         const additionalParams = new URLSearchParams(currentSearchParams?.toString());
                                         additionalParams.set('sort', 'fee');
                                         router.push(
-                                            pickClusterParams(currentPathname, currentSearchParams, additionalParams)
+                                            pickClusterParams(currentPathname, currentSearchParams, additionalParams),
                                         );
                                     }}
                                 >
                                     Fee
                                 </th>
+                                <th
+                                    className="text-muted c-pointer"
+                                    onClick={() => {
+                                        const additionalParams = new URLSearchParams(currentSearchParams?.toString());
+                                        additionalParams.set('sort', 'reservedCUs');
+                                        router.push(
+                                            pickClusterParams(currentPathname, currentSearchParams, additionalParams),
+                                        );
+                                    }}
+                                >
+                                    Reserved CUs
+                                </th>
                                 {showComputeUnits && (
                                     <th
-                                        className="text-muted text-end c-pointer"
+                                        className="text-muted c-pointer"
                                         onClick={() => {
                                             const additionalParams = new URLSearchParams(
-                                                currentSearchParams?.toString()
+                                                currentSearchParams?.toString(),
                                             );
                                             additionalParams.set('sort', 'compute');
                                             router.push(
                                                 pickClusterParams(
                                                     currentPathname,
                                                     currentSearchParams,
-                                                    additionalParams
-                                                )
+                                                    additionalParams,
+                                                ),
                                             );
                                         }}
                                     >
                                         Compute
                                     </th>
                                 )}
+                                <th
+                                    className="text-muted c-pointer"
+                                    onClick={() => {
+                                        const additionalParams = new URLSearchParams(currentSearchParams?.toString());
+                                        additionalParams.set('sort', 'txnCost');
+                                        router.push(
+                                            pickClusterParams(currentPathname, currentSearchParams, additionalParams),
+                                        );
+                                    }}
+                                >
+                                    Txn Cost
+                                </th>
                                 <th className="text-muted">Invoked Programs</th>
                             </tr>
                         </thead>
@@ -265,7 +312,7 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                                 }
 
                                 if (tx.signature) {
-                                    signature = <Signature signature={tx.signature} link truncateChars={48} />;
+                                    signature = <Signature signature={tx.signature} link truncateChars={32} />;
                                 }
 
                                 const entries = Array.from(tx.invocations.entries());
@@ -280,18 +327,27 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
 
                                         <td>{signature}</td>
 
-                                        <td className="text-end">
-                                            {tx.meta !== null ? <SolBalance lamports={tx.meta.fee} /> : 'Unknown'}
+                                        <td>{tx.meta !== null ? <SolBalance lamports={tx.meta.fee} /> : 'Unknown'}</td>
+
+                                        <td>
+                                            {tx.reservedComputeUnits !== undefined
+                                                ? new Intl.NumberFormat('en-US').format(tx.reservedComputeUnits)
+                                                : 'Unknown'}
                                         </td>
 
                                         {showComputeUnits && (
-                                            <td className="text-end">
+                                            <td>
                                                 {tx.logTruncated && '>'}
                                                 {tx.computeUnits !== undefined
                                                     ? new Intl.NumberFormat('en-US').format(tx.computeUnits)
                                                     : 'Unknown'}
                                             </td>
                                         )}
+                                        <td>
+                                            {tx.costUnits !== undefined
+                                                ? new Intl.NumberFormat('en-US').format(tx.costUnits)
+                                                : 'Unknown'}
+                                        </td>
                                         <td>
                                             {tx.invocations.size === 0
                                                 ? 'NA'
@@ -396,7 +452,7 @@ const FilterDropdown = ({ filter, invokedPrograms, totalTransactionCount }: Filt
                 dropdown.dispose();
             }
         },
-        [dropdownRef]
+        [dropdownRef],
     );
 
     return (
@@ -443,7 +499,7 @@ function FilterLink({
         return `${currentPathname}${nextQueryString ? `?${nextQueryString}` : ''}`;
     }, [currentPathname, currentSearchParams, name, programId]);
     return (
-        <Link className={`dropdown-item${programId === currentFilter ? ' active' : ''}`} href={href} key={programId}>
+        <Link className={cn('dropdown-item', programId === currentFilter && 'active')} href={href} key={programId}>
             {`${name} (${transactionCount})`}
         </Link>
     );

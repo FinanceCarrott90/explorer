@@ -9,7 +9,7 @@
         "noEmit": true,
         "esModuleInterop": true,
         "module": "esnext",
-        "moduleResolution": "node",
+        "moduleResolution": "bundler",
         "resolveJsonModule": true,
         "isolatedModules": true,
         "jsx": "preserve",
@@ -22,12 +22,23 @@
         "paths": {
             "@/*": ["./*"],
             "@components/*": ["./app/components/*"],
+            "@entities/*": ["./app/entities/*"],
+            "@features/*": ["./app/features/*"],
             "@img/*": ["./app/img/*"],
             "@providers/*": ["./app/providers/*"],
+            "@shared/*": ["./app/components/shared/*"],
             "@utils/*": ["./app/utils/*"],
+            "@storybook-config/*": ["./.storybook/*"],
             "@validators/*": ["./app/validators/*"]
         }
     },
-    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+    "include": [
+        "next-env.d.ts",
+        "**/*.ts",
+        "**/*.tsx",
+        ".next/types/**/*.ts",
+        ".next-prod/types/**/*.ts",
+        ".next-dev/types/**/*.ts"
+    ],
     "exclude": ["node_modules"]
 }

@@ -1,11 +1,19 @@
 from typing import Annotated, Optional
+import asyncio
 import requests
 import json
 import os
 import re
 from pydantic import BaseModel, Field, BeforeValidator, ConfigDict, ValidationError
 
+from solana.rpc.async_api import AsyncClient
+from solders.pubkey import Pubkey
+
+from fetch_mainnet_activations import get_epoch_for_slot
+
 FEATURE_GATES_PATH = 'app/utils/feature-gate/featureGates.json'
+DEVNET_RPC_URL = 'https://api.devnet.solana.com'
+TESTNET_RPC_URL = 'https://api.testnet.solana.com'
 
 IntOrBlank = Annotated[
     Optional[int],
@@ -155,7 +163,71 @@ def safe_model_validate(model, data):
         return None
 
 
-def parse_wiki():
+RATE_LIMIT_DELAY = 0.5
+MAX_RETRIES = 3
+
+async def fetch_activation_epoch(connection: AsyncClient, epoch_schedule, key: str, backup_epoch: int | None) -> int | None:
+    """Fetch the activation epoch for a single feature gate from on-chain data."""
+    account = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            await asyncio.sleep(RATE_LIMIT_DELAY)
+            account = await connection.get_account_info(Pubkey.from_string(key))
+            break
+        except Exception as e:
+            if '429' in str(e) and attempt < MAX_RETRIES - 1:
+                wait = 2 ** (attempt + 1)
+                print(f"Rate limited on {key}, retrying in {wait}s...")
+                await asyncio.sleep(wait)
+            else:
+                print(f"Failed to fetch {key}: {e}")
+                return backup_epoch
+
+    if account is None:
+        return backup_epoch
+
+    if account.value and account.value.data:
+        # First byte indicates if activated (1) or not (0)
+        is_activated = account.value.data[0]
+        
+        if is_activated:
+            # If activated, next 8 bytes contain activation slot as u64
+            activation_slot = int.from_bytes(account.value.data[1:9], 'little')
+
+            # Technically, feature gates only become active in the following epoch
+            return get_epoch_for_slot(epoch_schedule, activation_slot) + 1
+        else:
+            return backup_epoch
+    else:
+        return backup_epoch
+
+
+async def fetch_cluster_activations(cluster_url: str, features_to_check: list[tuple[StoredFeature, Feature]]) -> None:
+    """Fetch activation epochs for all features from a single cluster, reusing one connection."""
+    if not features_to_check:
+        return
+
+    cluster_name = "devnet" if "devnet" in cluster_url else "testnet" if "testnet" in cluster_url else cluster_url
+
+    async with AsyncClient(cluster_url) as connection:
+        epoch_schedule = (await connection.get_epoch_schedule()).value
+        if epoch_schedule is None:
+            print(f"[{cluster_name}] Failed to fetch epoch schedule, skipping cluster.")
+            return
+
+        for existing, new_feature in features_to_check:
+            if 'devnet' in cluster_url:
+                existing.devnet_activation_epoch = await fetch_activation_epoch(
+                    connection, epoch_schedule, existing.key, existing.devnet_activation_epoch
+                )
+            elif 'testnet' in cluster_url:
+                existing.testnet_activation_epoch = await fetch_activation_epoch(
+                    connection, epoch_schedule, existing.key, existing.testnet_activation_epoch
+                )
+            print(f"  [{cluster_name}] Checked {existing.key}")
+
+
+async def parse_wiki():
     # Fetch markdown content
     url = "https://raw.githubusercontent.com/wiki/anza-xyz/agave/Feature-Gate-Tracker-Schedule.md"
     response = requests.get(url)
@@ -192,7 +264,7 @@ def parse_wiki():
                 
                 features.append(stored_feature)
     
-    # # Load existing features if file exists
+    # Load existing features if file exists
     existing_features: list[StoredFeature] = []
     if os.path.exists(FEATURE_GATES_PATH):
         with open(FEATURE_GATES_PATH, 'r') as f:
@@ -205,15 +277,17 @@ def parse_wiki():
             else:
                 raise ValueError(f"Unknown feature: {feature}")
 
-    # # Update existing features and add new ones
+    # Update existing features and add new ones
     features_by_key: dict[str, Feature] = {f.key: f for f in features if f.key is not None}
+    features_to_check: list[tuple[StoredFeature, Feature]] = []
     for existing in existing_features:
         if existing.key in features_by_key:
-            # Only update devnet and testnet epochs
-            new_feature = features_by_key[existing.key]
-            existing.devnet_activation_epoch = new_feature.devnet_activation_epoch
-            existing.testnet_activation_epoch = new_feature.testnet_activation_epoch
+            features_to_check.append((existing, features_by_key[existing.key]))
             del features_by_key[existing.key]
+
+    print(f"Checking {len(features_to_check)} features against devnet and testnet...")
+    await fetch_cluster_activations(DEVNET_RPC_URL, features_to_check)
+    await fetch_cluster_activations(TESTNET_RPC_URL, features_to_check)
     
     # Print new features that were found
     new_features = list(features_by_key.values())
@@ -231,4 +305,4 @@ def parse_wiki():
 
 
 if __name__ == "__main__":
-    parse_wiki() 
+    asyncio.run(parse_wiki())

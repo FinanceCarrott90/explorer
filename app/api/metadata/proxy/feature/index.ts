@@ -1,6 +1,6 @@
-import { default as fetch, Headers } from 'node-fetch';
+import { default as fetch, Headers, Response as NodeFetchResponse } from 'node-fetch';
 
-import Logger from '@/app/utils/logger';
+import { Logger } from '@/app/shared/lib/logger';
 
 import {
     errors,
@@ -10,9 +10,15 @@ import {
     StatusError,
     unsupportedMediaError,
 } from './errors';
-import { processBinary, processJson } from './processors';
+import { processBinary, processJson, processTextAsJson } from './processors';
 
 export { StatusError };
+
+// Content-type matchers
+export const matchJson = (header?: string | null) => header?.includes('application/json');
+export const matchTextPlain = (header?: string | null) => header?.includes('text/plain');
+export const matchImage = (header?: string | null) => header?.includes('image/');
+export const matchJsonContent = (header?: string | null) => matchJson(header) || matchTextPlain(header);
 
 /**
  *  use this to handle errors that are thrown by fetch.
@@ -34,9 +40,9 @@ async function requestResource(
     uri: string,
     headers: Headers,
     timeout: number,
-    size: number
-): Promise<[Error, void] | [void, fetch.Response]> {
-    let response: fetch.Response | undefined;
+    size: number,
+): Promise<[Error, void] | [void, NodeFetchResponse]> {
+    let response: NodeFetchResponse | undefined;
     let error;
     try {
         response = await fetch(uri, {
@@ -50,7 +56,7 @@ async function requestResource(
         if (e instanceof Error) {
             error = e;
         } else {
-            Logger.debug('Debug:', e);
+            Logger.debug('[api:metadata-proxy] Failed to fetch resource', { error: e });
             error = new Error('Cannot fetch resource');
         }
     }
@@ -62,8 +68,10 @@ export async function fetchResource(
     uri: string,
     headers: Headers,
     timeout: number,
-    size: number
-): Promise<Awaited<ReturnType<typeof processBinary> | ReturnType<typeof processJson>>> {
+    size: number,
+): Promise<
+    Awaited<ReturnType<typeof processBinary> | ReturnType<typeof processJson> | ReturnType<typeof processTextAsJson>>
+> {
     const [error, response] = await requestResource(uri, headers, timeout, size);
 
     // check for response to infer proper type for it
@@ -73,11 +81,13 @@ export async function fetchResource(
     }
 
     // guess how to process resource by content-type
-    const isJson = response.headers.get('content-type')?.includes('application/json');
-
-    const isImage = response.headers.get('content-type')?.includes('image/');
+    const contentTypeHeader = response.headers.get('content-type');
+    const isJson = matchJson(contentTypeHeader);
+    const isPlainText = matchTextPlain(contentTypeHeader);
+    const isImage = matchImage(contentTypeHeader);
 
     if (isJson) return processJson(response);
+    if (isPlainText) return processTextAsJson(response);
 
     if (isImage) return processBinary(response);
 
