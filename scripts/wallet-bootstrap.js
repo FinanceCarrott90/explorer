@@ -37,7 +37,16 @@ const writeKeypair = (targetPath, keypair) => {
 ensureDirectory(resolvedPath);
 
 if (fs.existsSync(resolvedPath) && !force) {
-    const existingKeypair = readExistingKeypair(resolvedPath);
+    let existingKeypair;
+    try {
+        existingKeypair = readExistingKeypair(resolvedPath);
+    } catch (error) {
+        console.error(`Failed to read keypair at ${resolvedPath}.`);
+        console.error(error instanceof Error ? error.message : String(error));
+        console.error('Fix the file contents or run with --force to regenerate.');
+        process.exit(1);
+    }
+
     console.log('Wallet bootstrap skipped (keypair already exists).');
     console.log(`Keypair path: ${resolvedPath}`);
     console.log(`Public key: ${existingKeypair.publicKey.toBase58()}`);
@@ -47,6 +56,12 @@ if (fs.existsSync(resolvedPath) && !force) {
 
 const keypair = Keypair.generate();
 writeKeypair(resolvedPath, keypair);
+
+if (process.platform === 'win32') {
+    console.warn(
+        'Note: Windows may ignore POSIX file permissions. Consider securing the keypair file manually.',
+    );
+}
 
 console.log('Wallet bootstrap complete.');
 console.log(`Keypair path: ${resolvedPath}`);
