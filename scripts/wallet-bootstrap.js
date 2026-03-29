@@ -53,12 +53,27 @@ const writeKeypair = (targetPath, keypair, { overwrite } = {}) => {
             fs.fchmodSync(fileDescriptor, 0o600);
         } catch (error) {
             if (process.platform !== 'win32') {
-                throw error;
+                throw new Error(
+                    `Failed to set keypair permissions for ${targetPath}: ${error instanceof Error ? error.message : String(error)}`,
+                );
             }
         }
         fs.writeSync(fileDescriptor, serialized);
     } finally {
         fs.closeSync(fileDescriptor);
+    }
+
+    if (process.platform !== 'win32') {
+        try {
+            const currentMode = fs.statSync(targetPath).mode & 0o777;
+            if (currentMode !== 0o600) {
+                fs.chmodSync(targetPath, 0o600);
+            }
+        } catch (error) {
+            throw new Error(
+                `Failed to verify keypair permissions for ${targetPath}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
     }
 };
 
