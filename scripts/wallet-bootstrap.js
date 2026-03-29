@@ -44,14 +44,18 @@ const readExistingKeypair = targetPath => {
     }
 };
 
-const writeKeypair = (targetPath, keypair) => {
+const writeKeypair = (targetPath, keypair, { overwrite } = {}) => {
     const serialized = JSON.stringify(Array.from(keypair.secretKey));
-    if (fs.existsSync(targetPath)) {
-        fs.rmSync(targetPath);
-    }
-
-    const fileDescriptor = fs.openSync(targetPath, 'wx', 0o600);
+    const openFlags = overwrite ? 'w' : 'wx';
+    const fileDescriptor = fs.openSync(targetPath, openFlags, 0o600);
     try {
+        try {
+            fs.fchmodSync(fileDescriptor, 0o600);
+        } catch (error) {
+            if (process.platform !== 'win32') {
+                throw error;
+            }
+        }
         fs.writeSync(fileDescriptor, serialized);
     } finally {
         fs.closeSync(fileDescriptor);
@@ -79,7 +83,7 @@ if (fs.existsSync(resolvedPath) && !force) {
 }
 
 const keypair = Keypair.generate();
-writeKeypair(resolvedPath, keypair);
+writeKeypair(resolvedPath, keypair, { overwrite: force });
 
 if (process.platform === 'win32') {
     console.warn(
