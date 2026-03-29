@@ -25,13 +25,33 @@ const ensureDirectory = targetPath => {
 
 const readExistingKeypair = targetPath => {
     const raw = fs.readFileSync(targetPath, 'utf8');
-    const secretKey = Uint8Array.from(JSON.parse(raw));
-    return Keypair.fromSecretKey(secretKey);
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (error) {
+        throw new Error('Keypair file contains invalid JSON.');
+    }
+
+    if (!Array.isArray(parsed)) {
+        throw new Error('Keypair file must contain an array of numbers.');
+    }
+
+    try {
+        const secretKey = Uint8Array.from(parsed);
+        return Keypair.fromSecretKey(secretKey);
+    } catch (error) {
+        throw new Error('Keypair file contains invalid secret key data.');
+    }
 };
 
 const writeKeypair = (targetPath, keypair) => {
     const serialized = JSON.stringify(Array.from(keypair.secretKey));
-    fs.writeFileSync(targetPath, serialized, { mode: 0o600 });
+    const fileDescriptor = fs.openSync(targetPath, 'w', 0o600);
+    try {
+        fs.writeFileSync(fileDescriptor, serialized);
+    } finally {
+        fs.closeSync(fileDescriptor);
+    }
 };
 
 ensureDirectory(resolvedPath);
