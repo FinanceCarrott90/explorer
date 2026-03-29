@@ -7,6 +7,7 @@ const nacl = require('tweetnacl');
 const { Keypair } = require('@solana/web3.js');
 
 const DEFAULT_EXPIRATION_DAYS = 7;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const projectRoot = path.join(__dirname, '..');
 const walletDir = path.join(projectRoot, '.wallet');
 const keypairPath = path.join(walletDir, 'id.json');
@@ -22,7 +23,8 @@ async function main() {
     const permission = createSpendPermission(keypair);
 
     await fs.mkdir(walletDir, { recursive: true });
-    await fs.writeFile(permissionPath, JSON.stringify(permission, null, 2), { mode: 0o600 });
+    await fs.writeFile(permissionPath, JSON.stringify(permission, null, 2));
+    await fs.chmod(permissionPath, 0o600);
 
     console.log(`✅ Spend permission saved to ${path.relative(projectRoot, permissionPath)}`);
     console.log(`Wallet: ${permission.publicKey}`);
@@ -33,28 +35,49 @@ async function loadOrCreateKeypair() {
     await fs.mkdir(walletDir, { recursive: true });
 
     try {
-        const secretKey = await fs.readFile(keypairPath, 'utf8');
-        const parsed = JSON.parse(secretKey);
-
-        if (!Array.isArray(parsed) || parsed.length === 0) {
-            throw new Error('Wallet keypair is invalid: expected a JSON array');
-        }
-
-        return Keypair.fromSecretKey(Uint8Array.from(parsed));
+        return await readKeypair();
     } catch (error) {
         if (error.code !== 'ENOENT') {
             throw error;
         }
 
         const keypair = Keypair.generate();
-        await fs.writeFile(keypairPath, JSON.stringify(Array.from(keypair.secretKey)), { mode: 0o600 });
-        return keypair;
+        try {
+            await fs.writeFile(keypairPath, JSON.stringify(Array.from(keypair.secretKey)), {
+                flag: 'wx',
+            });
+            await fs.chmod(keypairPath, 0o600);
+            return keypair;
+        } catch (writeError) {
+            if (writeError.code === 'EEXIST') {
+                return await readKeypair();
+            }
+
+            throw writeError;
+        }
     }
+}
+
+async function readKeypair() {
+    const secretKey = await fs.readFile(keypairPath);
+    let parsed;
+
+    try {
+        parsed = JSON.parse(secretKey.toString('utf8'));
+    } catch (error) {
+        throw new Error(`Wallet keypair is invalid JSON. Delete ${keypairPath} and re-run the script.`);
+    }
+
+    if (!Array.isArray(parsed) || parsed.length !== 64) {
+        throw new Error('Wallet keypair is invalid: expected a 64-byte secret key array');
+    }
+
+    return Keypair.fromSecretKey(Uint8Array.from(parsed));
 }
 
 function createSpendPermission(keypair) {
     const issuedAt = new Date();
-    const expiresAt = new Date(issuedAt.getTime() + DEFAULT_EXPIRATION_DAYS * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(issuedAt.getTime() + DEFAULT_EXPIRATION_DAYS * MILLISECONDS_PER_DAY);
     const payload = {
         application: 'solana-explorer',
         publicKey: keypair.publicKey.toBase58(),
@@ -62,12 +85,16 @@ function createSpendPermission(keypair) {
         expiresAt: expiresAt.toISOString(),
     };
 
-    const message = JSON.stringify(payload);
+    const message = JSON.stringify(payload, [
+        'application',
+        'publicKey',
+        'issuedAt',
+        'expiresAt',
+    ]);
     const signature = nacl.sign.detached(Buffer.from(message), keypair.secretKey);
 
     return {
         ...payload,
-        message,
         signature: bs58.encode(signature),
     };
 }
