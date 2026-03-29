@@ -46,9 +46,13 @@ const readExistingKeypair = targetPath => {
 
 const writeKeypair = (targetPath, keypair) => {
     const serialized = JSON.stringify(Array.from(keypair.secretKey));
-    const fileDescriptor = fs.openSync(targetPath, 'w', 0o600);
+    if (fs.existsSync(targetPath)) {
+        fs.rmSync(targetPath);
+    }
+
+    const fileDescriptor = fs.openSync(targetPath, 'wx', 0o600);
     try {
-        fs.writeFileSync(fileDescriptor, serialized);
+        fs.writeSync(fileDescriptor, serialized);
     } finally {
         fs.closeSync(fileDescriptor);
     }
