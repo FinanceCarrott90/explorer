@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-const VALID_RECIPIENT = '0xFB32B8A24648E376D387190E665A5DFe9880e27B';
+const VALID_RECIPIENT = 'So11111111111111111111111111111111111111112';
+const INVALID_RECIPIENT = '0xFB32B8A24648E376D387190E665A5DFe9880e27B';
 
 const createRequest = (body: unknown) =>
     new Request('http://localhost:3000/api/invoice', {
@@ -29,6 +30,16 @@ describe('POST /api/invoice', () => {
 
         expect(response.status).toBe(400);
         expect(await response.json()).toEqual({ error: 'Invalid request' });
+        expect(response.headers.get('Cache-Control')).toBe('no-store, max-age=0');
+    });
+
+    it('returns 400 for an invalid recipient', async () => {
+        const { POST } = await import('../route');
+
+        const response = await POST(createRequest({ amount: 2, recipient: INVALID_RECIPIENT }));
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Invalid recipient address' });
         expect(response.headers.get('Cache-Control')).toBe('no-store, max-age=0');
     });
 

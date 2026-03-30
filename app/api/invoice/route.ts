@@ -1,3 +1,4 @@
+import { PublicKey } from '@solana/web3.js';
 import { NextResponse } from 'next/server';
 import { is, number, refine, string, type } from 'superstruct';
 
@@ -33,12 +34,20 @@ export async function POST(request: Request) {
     }
 
     const invoice = body as InvoiceRequest;
-    const url = buildPaymentUrl(invoice);
+    let recipient: string;
+
+    try {
+        recipient = new PublicKey(invoice.recipient).toBase58();
+    } catch {
+        return NextResponse.json({ error: 'Invalid recipient address' }, { headers: NO_STORE_HEADERS, status: 400 });
+    }
+
+    const url = buildPaymentUrl({ ...invoice, recipient });
 
     return NextResponse.json(
         {
             amount: invoice.amount,
-            recipient: invoice.recipient,
+            recipient,
             url,
         },
         { headers: NO_STORE_HEADERS },
