@@ -1,5 +1,24 @@
 'use client';
 
+const PREVIEW_WIDTH = 250;
+const PREVIEW_HEIGHT = 120;
+const PREVIEW_FALLBACK_TEXT = 'Preview unavailable';
+
+const escapeSvgText = (value: string) =>
+    value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+const buildFallbackPreview = (title: string) => {
+    const safeTitle = escapeSvgText(title);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PREVIEW_WIDTH}" height="${PREVIEW_HEIGHT}" viewBox="0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}" role="img" aria-label="${safeTitle}">
+  <rect width="100%" height="100%" rx="10" ry="10" fill="#1f2b28"/>
+  <rect x="8" y="8" width="${PREVIEW_WIDTH - 16}" height="${PREVIEW_HEIGHT - 16}" rx="8" ry="8" fill="#263733" stroke="#2f453f"/>
+  <text x="50%" y="52%" fill="#e5f7f0" font-size="13" font-family="system-ui, -apple-system, Segoe UI, sans-serif" text-anchor="middle" dominant-baseline="middle" textLength="${PREVIEW_WIDTH - 32}" lengthAdjust="spacingAndGlyphs">${safeTitle}</text>
+  <text x="50%" y="70%" fill="#9bb9ad" font-size="11" font-family="system-ui, -apple-system, Segoe UI, sans-serif" text-anchor="middle" dominant-baseline="middle">${PREVIEW_FALLBACK_TEXT}</text>
+</svg>`;
+
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
 export function DeveloperResources() {
     return (
         <div className="card">
@@ -58,6 +77,8 @@ function ResourceCard({
     imageBackground?: string;
     link: string;
 }) {
+    const fallbackPreview = buildFallbackPreview(title);
+
     return (
         <div className="flex flex-col" style={{ height: '200px', width: '250px' }}>
             <div className="w-full mb-3">
@@ -66,11 +87,15 @@ function ResourceCard({
                     <img
                         src={image}
                         alt={`${title} preview`}
+                        onError={event => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src = fallbackPreview;
+                        }}
                         style={{
                             backgroundColor: imageBackground,
-                            height: '120px',
+                            height: `${PREVIEW_HEIGHT}px`,
                             objectFit: 'cover',
-                            width: '250px',
+                            width: `${PREVIEW_WIDTH}px`,
                         }}
                     />
                 </a>
