@@ -111,9 +111,10 @@ export function InteractWithIdl({
         params: InstructionCallParams;
     }>({ alwaysConfirm: cluster === Cluster.MainnetBeta && approvedAccounts.length > 0 });
 
+    const pendingAccountInputs = pendingContext?.params.accounts;
     const pendingAccounts = useMemo(
-        () => extractAccountAddresses(pendingContext?.params.accounts ?? {}),
-        [pendingContext],
+        () => extractAccountAddresses(pendingAccountInputs ?? {}),
+        [pendingAccountInputs],
     );
     const matchedApprovedAccount = useMemo(
         () => findApprovedAccount(approvedAccounts, pendingAccounts),

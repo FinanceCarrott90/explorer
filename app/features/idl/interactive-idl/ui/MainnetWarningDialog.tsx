@@ -35,7 +35,7 @@ export function MainnetWarningDialog({
     const manualApprovalDisabled = whitelistEnabled && !matchedAccount;
     const confirmDisabled = manualApprovalDisabled || (whitelistEnabled && !hasManualApproval);
     const manualApprovalLabel = manualApprovalDisabled
-        ? 'Manual approval is required but no whitelisted account was detected for this transaction.'
+        ? 'No whitelisted account detected in this transaction.'
         : 'I have manually reviewed the matched account above and confirm it is approved.';
 
     useEffect(() => {
