@@ -4,6 +4,7 @@
 :root {
     --accent: #13d89b;
     --card-border: #111;
+    --explorer-default-font: 'Rubik', system-ui, sans-serif;
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
     --border: oklch(0.922 0 0);

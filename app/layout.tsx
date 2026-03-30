@@ -1,3 +1,6 @@
+import '@fontsource/rubik/300.css';
+import '@fontsource/rubik/400.css';
+import '@fontsource/rubik/700.css';
 import './scss/theme-dark.scss';
 import './styles.css';
 
@@ -13,7 +16,6 @@ import { isEnvEnabled } from '@utils/env';
 import { BotIdClient } from 'botid/client';
 import type { Viewport } from 'next';
 import dynamic from 'next/dynamic';
-import { Rubik } from 'next/font/google';
 import { Metadata } from 'next/types';
 
 import { TokenInfoBatchProvider } from '@/app/entities/token-info';
@@ -38,16 +40,9 @@ export const viewport: Viewport = {
     width: 'device-width',
 };
 
-const rubikFont = Rubik({
-    display: 'swap',
-    subsets: ['latin'],
-    variable: '--explorer-default-font',
-    weight: ['300', '400', '700'],
-});
-
 export default function RootLayout({ analytics, children }: { analytics: React.ReactNode; children: React.ReactNode }) {
     return (
-        <html lang="en" className={`${rubikFont.variable}`}>
+        <html lang="en">
             <head>
                 <link rel="icon" href="/favicon.png" type="image/png" />
                 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
