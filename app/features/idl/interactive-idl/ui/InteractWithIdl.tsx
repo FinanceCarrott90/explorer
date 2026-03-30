@@ -2,11 +2,14 @@ import { LoadingCard } from '@components/shared/LoadingCard';
 import type { InstructionData, SupportedIdl } from '@entities/idl';
 import { useToast } from '@shared/ui/sonner/use-toast';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { Cluster } from '@utils/cluster';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ExplorerLink } from '@/app/entities/cluster';
+import { useCluster } from '@/app/providers/cluster';
 
+import { extractAccountValues, findApprovedAccount, getApprovedAccounts } from '../lib/approval';
 import { originalIdlAtom, programIdAtom } from '../model/state-atoms';
 import { isEnabled, useInstruction } from '../model/use-instruction';
 import type { InstructionCallParams } from '../model/use-instruction-form';
@@ -39,10 +42,13 @@ export function InteractWithIdl({
     const idl = useAtomValue(originalIdlAtom);
     const progId = useAtomValue(programIdAtom);
     const { connected, publicKey, wallet } = useWallet();
+    const { cluster } = useCluster();
 
     const [currentInstruction, setCurrentInstruction] = useState<{ name: string; programId?: string } | null>(null);
     const [hasTrackedTabOpen, setHasTrackedTabOpen] = useState(false);
     const [hasTrackedWalletConnect, setHasTrackedWalletConnect] = useState(false);
+    const approvedAccounts = useMemo(() => getApprovedAccounts(), []);
+    const requireManualApproval = cluster === Cluster.MainnetBeta && approvedAccounts.length > 0;
 
     useEffect(() => {
         if (!hasTrackedTabOpen && progId) {
@@ -101,14 +107,36 @@ export function InteractWithIdl({
         programId: progId?.toString(),
     });
 
-    const { requireConfirmation, confirm, cancel, isOpen, hasPendingAction } = useMainnetConfirmation<{
+    const { requireConfirmation, confirm, cancel, isOpen, hasPendingAction, pendingContext } = useMainnetConfirmation<{
         data: InstructionData;
         params: InstructionCallParams;
-    }>();
+    }>({ alwaysConfirm: requireManualApproval });
+
+    const pendingAccounts = useMemo(
+        () => extractAccountValues(pendingContext?.params.accounts ?? {}),
+        [pendingContext],
+    );
+    const matchedApprovedAccount = useMemo(
+        () => findApprovedAccount(approvedAccounts, pendingAccounts),
+        [approvedAccounts, pendingAccounts],
+    );
 
     const handleExecuteInstruction = useCallback(
         async (data: InstructionData, params: InstructionCallParams) => {
             const programIdStr = progId?.toString();
+            const inputAccounts = extractAccountValues(params.accounts);
+            const approvedAccount = findApprovedAccount(approvedAccounts, inputAccounts);
+
+            if (requireManualApproval && !approvedAccount) {
+                toast.custom({
+                    description: `Add one of the approved accounts before executing this instruction: ${approvedAccounts.join(
+                        ', ',
+                    )}`,
+                    title: 'Whitelisted account required',
+                    type: 'error',
+                });
+                return;
+            }
 
             onTransactionSubmitted?.(programIdStr, data.name);
 
@@ -121,7 +149,15 @@ export function InteractWithIdl({
                 { data, params },
             );
         },
-        [invokeInstruction, requireConfirmation, progId, onTransactionSubmitted],
+        [
+            approvedAccounts,
+            invokeInstruction,
+            onTransactionSubmitted,
+            progId,
+            requireConfirmation,
+            requireManualApproval,
+            toast,
+        ],
     );
 
     if (initializationError) {
@@ -148,18 +184,20 @@ export function InteractWithIdl({
                 lastResult={lastResult}
                 parseLogs={parseLogs}
             />
-            {hasPendingAction && (
-                <MainnetWarningDialog
-                    open={isOpen}
-                    onOpenChange={open => {
-                        if (!open) {
-                            cancel();
-                        }
-                    }}
-                    onConfirm={confirm}
-                    onCancel={cancel}
-                />
-            )}
-        </>
-    );
+                {hasPendingAction && (
+                    <MainnetWarningDialog
+                        open={isOpen}
+                        onOpenChange={open => {
+                            if (!open) {
+                                cancel();
+                            }
+                        }}
+                        onConfirm={confirm}
+                        onCancel={cancel}
+                        approvedAccounts={approvedAccounts}
+                        matchedAccount={matchedApprovedAccount}
+                    />
+                )}
+            </>
+        );
 }
