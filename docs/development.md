@@ -1,5 +1,15 @@
 ## Development
 
+### Local setup
+
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm wallet:bootstrap
+pnpm wallet:spend-permission
+pnpm dev
+```
+
 ### Creating new UI components
 
 For new components we use [shadcn/ui](https://ui.shadcn.com/docs).
