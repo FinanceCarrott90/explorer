@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { NextResponse } from 'next/server';
-import { is, number, refine, string, type } from 'superstruct';
+import { Infer, is, number, refine, string, type } from 'superstruct';
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, max-age=0' };
 
@@ -9,10 +9,7 @@ const InvoiceRequestSchema = type({
     recipient: string(),
 });
 
-type InvoiceRequest = {
-    amount: number;
-    recipient: string;
-};
+type InvoiceRequest = Infer<typeof InvoiceRequestSchema>;
 
 function buildPaymentUrl({ amount, recipient }: InvoiceRequest): string {
     const url = new URL(`solana:${recipient}`);
@@ -33,7 +30,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid request' }, { headers: NO_STORE_HEADERS, status: 400 });
     }
 
-    const invoice = body as InvoiceRequest;
+    const invoice = body;
     let recipient: string;
 
     try {
