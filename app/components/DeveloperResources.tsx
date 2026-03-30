@@ -23,7 +23,7 @@ const buildFallbackPreview = (title: string) => {
   <text x="50%" y="70%" fill="#9bb9ad" font-size="11" font-family="system-ui, -apple-system, Segoe UI, sans-serif" text-anchor="middle" dominant-baseline="middle">${PREVIEW_FALLBACK_TEXT}</text>
 </svg>`;
 
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
 export function DeveloperResources() {
