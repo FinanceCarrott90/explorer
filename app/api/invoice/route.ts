@@ -5,7 +5,7 @@ import { Infer, is, number, refine, string, type } from 'superstruct';
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, max-age=0' };
 
 const InvoiceRequestSchema = type({
-    amount: refine(number(), 'positive', value => Number.isFinite(value) && value > 0),
+    amount: refine(number(), 'positive', value => value > 0),
     recipient: string(),
 });
 
@@ -30,20 +30,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid request' }, { headers: NO_STORE_HEADERS, status: 400 });
     }
 
-    const invoice = body;
+    const invoiceRequest = body;
     let recipient: string;
 
     try {
-        recipient = new PublicKey(invoice.recipient).toBase58();
+        recipient = new PublicKey(invoiceRequest.recipient).toBase58();
     } catch {
         return NextResponse.json({ error: 'Invalid recipient address' }, { headers: NO_STORE_HEADERS, status: 400 });
     }
 
-    const url = buildPaymentUrl({ ...invoice, recipient });
+    const url = buildPaymentUrl({ ...invoiceRequest, recipient });
 
     return NextResponse.json(
         {
-            amount: invoice.amount,
+            amount: invoiceRequest.amount,
             recipient,
             url,
         },
