@@ -32,7 +32,11 @@ export function MainnetWarningDialog({
 }: MainnetWarningDialogProps) {
     const [hasManualApproval, setHasManualApproval] = useState(false);
     const whitelistEnabled = approvedAccounts.length > 0;
+    const manualApprovalDisabled = whitelistEnabled && !matchedAccount;
     const confirmDisabled = whitelistEnabled && (!matchedAccount || !hasManualApproval);
+    const manualApprovalLabel = matchedAccount
+        ? 'I have manually reviewed the matched account above and confirm it is approved.'
+        : 'Add a whitelisted account to enable manual approval.';
 
     useEffect(() => {
         if (!open) {
@@ -85,10 +89,11 @@ export function MainnetWarningDialog({
                             <Switch
                                 id="manual-approval"
                                 checked={hasManualApproval}
+                                disabled={manualApprovalDisabled}
                                 onCheckedChange={setHasManualApproval}
                             />
                             <Label htmlFor="manual-approval" className="e-text-xs e-text-neutral-300">
-                                I have manually reviewed the recipient and confirm it matches my whitelist.
+                                {manualApprovalLabel}
                             </Label>
                         </div>
                     )}

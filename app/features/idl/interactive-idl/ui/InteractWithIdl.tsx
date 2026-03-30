@@ -124,19 +124,6 @@ export function InteractWithIdl({
     const handleExecuteInstruction = useCallback(
         async (data: InstructionData, params: InstructionCallParams) => {
             const programIdStr = progId?.toString();
-            const inputAccounts = extractAccountValues(params.accounts);
-            const approvedAccount = findApprovedAccount(approvedAccounts, inputAccounts);
-
-            if (requireManualApproval && !approvedAccount) {
-                toast.custom({
-                    description: `Add one of the approved accounts before executing this instruction: ${approvedAccounts.join(
-                        ', ',
-                    )}`,
-                    title: 'Whitelisted account required',
-                    type: 'error',
-                });
-                return;
-            }
 
             onTransactionSubmitted?.(programIdStr, data.name);
 
@@ -149,15 +136,7 @@ export function InteractWithIdl({
                 { data, params },
             );
         },
-        [
-            approvedAccounts,
-            invokeInstruction,
-            onTransactionSubmitted,
-            progId,
-            requireConfirmation,
-            requireManualApproval,
-            toast,
-        ],
+        [invokeInstruction, onTransactionSubmitted, progId, requireConfirmation],
     );
 
     if (initializationError) {
