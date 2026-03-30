@@ -1,7 +1,12 @@
 const APPROVED_ACCOUNTS_ENV = process.env.NEXT_PUBLIC_INTERACTIVE_IDL_APPROVED_ACCOUNTS ?? '';
 
 export function getApprovedAccounts(): string[] {
-    return APPROVED_ACCOUNTS_ENV.split(',')
+    const trimmed = APPROVED_ACCOUNTS_ENV.trim();
+    if (!trimmed) {
+        return [];
+    }
+
+    return trimmed.split(',')
         .map(account => account.trim())
         .filter(Boolean);
 }

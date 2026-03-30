@@ -48,6 +48,10 @@ export function InteractWithIdl({
     const [hasTrackedTabOpen, setHasTrackedTabOpen] = useState(false);
     const [hasTrackedWalletConnect, setHasTrackedWalletConnect] = useState(false);
     const approvedAccounts = useMemo(() => getApprovedAccounts(), []);
+    const alwaysConfirm = useMemo(
+        () => cluster === Cluster.MainnetBeta && approvedAccounts.length > 0,
+        [cluster, approvedAccounts.length],
+    );
 
     useEffect(() => {
         if (!hasTrackedTabOpen && progId) {
@@ -109,7 +113,7 @@ export function InteractWithIdl({
     const { requireConfirmation, confirm, cancel, isOpen, hasPendingAction, pendingContext } = useMainnetConfirmation<{
         data: InstructionData;
         params: InstructionCallParams;
-    }>({ alwaysConfirm: cluster === Cluster.MainnetBeta && approvedAccounts.length > 0 });
+    }>({ alwaysConfirm });
 
     const pendingAccountInputs = pendingContext?.params.accounts;
     const pendingAccounts = useMemo(

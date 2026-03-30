@@ -33,7 +33,7 @@ export function MainnetWarningDialog({
     const [hasManualApproval, setHasManualApproval] = useState(false);
     const whitelistEnabled = approvedAccounts.length > 0;
     const manualApprovalDisabled = whitelistEnabled && !matchedAccount;
-    const confirmDisabled = manualApprovalDisabled || (whitelistEnabled && !hasManualApproval);
+    const confirmDisabled = whitelistEnabled && (!matchedAccount || !hasManualApproval);
     const manualApprovalLabel = manualApprovalDisabled
         ? 'No whitelisted account detected in this transaction.'
         : 'I have manually reviewed the matched account above and confirm it is approved.';
