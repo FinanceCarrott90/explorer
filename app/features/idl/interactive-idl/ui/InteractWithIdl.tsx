@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExplorerLink } from '@/app/entities/cluster';
 import { useCluster } from '@/app/providers/cluster';
 
-import { extractAccountValues, findApprovedAccount, getApprovedAccounts } from '../lib/approval';
+import { extractAccountAddresses, findApprovedAccount, getApprovedAccounts } from '../lib/approval';
 import { originalIdlAtom, programIdAtom } from '../model/state-atoms';
 import { isEnabled, useInstruction } from '../model/use-instruction';
 import type { InstructionCallParams } from '../model/use-instruction-form';
@@ -113,7 +113,7 @@ export function InteractWithIdl({
     }>({ alwaysConfirm: requireManualApproval });
 
     const pendingAccounts = useMemo(
-        () => extractAccountValues(pendingContext?.params.accounts ?? {}),
+        () => extractAccountAddresses(pendingContext?.params.accounts ?? {}),
         [pendingContext],
     );
     const matchedApprovedAccount = useMemo(

@@ -36,7 +36,7 @@ export function MainnetWarningDialog({
     const confirmDisabled = whitelistEnabled && (!matchedAccount || !hasManualApproval);
     const manualApprovalLabel = matchedAccount
         ? 'I have manually reviewed the matched account above and confirm it is approved.'
-        : 'Add a whitelisted account to enable manual approval.';
+        : 'A whitelisted account must be present to proceed.';
 
     useEffect(() => {
         if (!open) {

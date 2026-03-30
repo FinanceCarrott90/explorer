@@ -6,7 +6,7 @@ export function getApprovedAccounts(): string[] {
         .filter(Boolean);
 }
 
-export function extractAccountValues(accounts: Record<string, string>): string[] {
+export function extractAccountAddresses(accounts: Record<string, string>): string[] {
     return Object.values(accounts)
         .map(account => account.trim())
         .filter(Boolean);
