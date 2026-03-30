@@ -1,11 +1,18 @@
 'use client';
 
+import { useMemo } from 'react';
+
 const PREVIEW_WIDTH = 250;
 const PREVIEW_HEIGHT = 120;
 const PREVIEW_FALLBACK_TEXT = 'Preview unavailable';
 
 const escapeSvgText = (value: string) =>
-    value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
 
 const buildFallbackPreview = (title: string) => {
     const safeTitle = escapeSvgText(title);
@@ -77,7 +84,7 @@ function ResourceCard({
     imageBackground?: string;
     link: string;
 }) {
-    const fallbackPreview = buildFallbackPreview(title);
+    const fallbackPreview = useMemo(() => buildFallbackPreview(title), [title]);
 
     return (
         <div className="flex flex-col" style={{ height: '200px', width: '250px' }}>
