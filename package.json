@@ -25,6 +25,7 @@
         "test:watch": "vitest --project specs --watch"
     },
     "dependencies": {
+        "@base-org/account": "^2.5.2",
         "@blockworks-foundation/mango-client": "3.6.7",
         "@bonfida/spl-name-service": "0.1.30",
         "@codama/dynamic-parsers": "1.1.12",
@@ -66,6 +67,7 @@
         "@solana/web3.js": "1.98.4",
         "@solflare-wallet/utl-sdk": "1.4.0",
         "@sqds/multisig": "2.1.3",
+        "@tanstack/react-query": "^5.90.21",
         "@types/bn.js": "5.1.0",
         "axios": "1.12.2",
         "bignumber.js": "9.0.2",
@@ -118,7 +120,9 @@
         "tailwind-merge": "3.0.2",
         "tweetnacl": "1.0.3",
         "typescript": "5.3.3",
-        "use-async-effect": "2.2.7"
+        "use-async-effect": "2.2.7",
+        "viem": "^2.47.4",
+        "wagmi": "^3.5.0"
     },
     "devDependencies": {
         "@eslint-community/eslint-plugin-eslint-comments": "4.5.0",
