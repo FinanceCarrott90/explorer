@@ -8,6 +8,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@shared/ui/dialog';
+import { Label } from '@shared/ui/label';
+import { Switch } from '@shared/ui/switch';
+import { useEffect, useState } from 'react';
 import { AlertCircle, Send } from 'react-feather';
 
 type MainnetWarningDialogProps = {
@@ -15,9 +18,32 @@ type MainnetWarningDialogProps = {
     onOpenChange: (open: boolean) => void;
     onConfirm: () => void;
     onCancel: () => void;
+    approvedAccounts?: string[];
+    matchedAccount?: string | null;
 };
 
-export function MainnetWarningDialog({ open, onOpenChange, onConfirm, onCancel }: MainnetWarningDialogProps) {
+export function MainnetWarningDialog({
+    open,
+    onOpenChange,
+    onConfirm,
+    onCancel,
+    approvedAccounts = [],
+    matchedAccount,
+}: MainnetWarningDialogProps) {
+    const [hasManualApproval, setHasManualApproval] = useState(false);
+    const whitelistEnabled = approvedAccounts.length > 0;
+    const manualApprovalDisabled = whitelistEnabled && !matchedAccount;
+    const confirmDisabled = whitelistEnabled && (!matchedAccount || !hasManualApproval);
+    const manualApprovalLabel = manualApprovalDisabled
+        ? 'No approved account detected in this transaction.'
+        : 'I have manually reviewed the matched account above and confirm it is approved.';
+
+    useEffect(() => {
+        if (!open) {
+            setHasManualApproval(false);
+        }
+    }, [open]);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -37,6 +63,40 @@ export function MainnetWarningDialog({ open, onOpenChange, onConfirm, onCancel }
                         &quot;as available&quot; basis. Solana Explorer does not provide any warranties and will not be
                         liable for any loss, direct or indirect, through continued use of this feature.
                     </p>
+                    {whitelistEnabled && (
+                        <div className="e-space-y-2 e-rounded-md e-border e-border-neutral-800 e-bg-neutral-900/60 e-p-3">
+                            <p className="e-text-xs e-font-semibold e-text-neutral-300">Approved accounts</p>
+                            <ul className="e-space-y-1">
+                                {approvedAccounts.map(account => (
+                                    <li key={account} className="e-text-xs e-text-neutral-400">
+                                        <span className="e-font-mono">{account}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                            {matchedAccount ? (
+                                <p className="e-text-xs e-text-emerald-400">
+                                    Matched account: <span className="e-font-mono">{matchedAccount}</span>
+                                </p>
+                            ) : (
+                                <p className="e-text-xs e-text-destructive">
+                                    No approved account was detected in the instruction.
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {whitelistEnabled && (
+                        <div className="e-flex e-items-center e-gap-3">
+                            <Switch
+                                id="manual-approval"
+                                checked={hasManualApproval}
+                                disabled={manualApprovalDisabled}
+                                onCheckedChange={setHasManualApproval}
+                            />
+                            <Label htmlFor="manual-approval" className="e-text-xs e-text-neutral-300">
+                                {manualApprovalLabel}
+                            </Label>
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -44,7 +104,7 @@ export function MainnetWarningDialog({ open, onOpenChange, onConfirm, onCancel }
                             Cancel
                         </Button>
                     </DialogClose>
-                    <Button variant="destructive" size="sm" onClick={onConfirm}>
+                    <Button variant="destructive" size="sm" onClick={onConfirm} disabled={confirmDisabled}>
                         <Send size={12} />
                         Yes, spend real funds
                     </Button>

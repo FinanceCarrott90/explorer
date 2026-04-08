@@ -18,26 +18,33 @@ type PendingAction<T> = {
  * prompt for confirmation (mainnet). Once accepted, the disclaimer is
  * persisted in a cookie.
  */
-export function useMainnetConfirmation<T = unknown>() {
+export function useMainnetConfirmation<T = unknown>({ alwaysConfirm = false }: { alwaysConfirm?: boolean } = {}) {
     const { cluster: currentCluster } = useCluster();
     const [isOpen, setIsOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction<T> | null>(null);
 
     const requireConfirmation = useCallback(
         async (action: () => Promise<void> | void, context?: T) => {
-            if (currentCluster === Cluster.MainnetBeta && !getCookie(MAINNET_DISCLAIMER_COOKIE)) {
+            if (currentCluster !== Cluster.MainnetBeta) {
+                await action();
+                return;
+            }
+
+            if (alwaysConfirm || !getCookie(MAINNET_DISCLAIMER_COOKIE)) {
                 setPendingAction({ action, context });
                 setIsOpen(true);
             } else {
                 await action();
             }
         },
-        [currentCluster],
+        [alwaysConfirm, currentCluster],
     );
 
     const confirm = useCallback(async () => {
         if (pendingAction) {
-            setCookie(MAINNET_DISCLAIMER_COOKIE, 'true', COOKIE_MAX_AGE);
+            if (!alwaysConfirm) {
+                setCookie(MAINNET_DISCLAIMER_COOKIE, 'true', COOKIE_MAX_AGE);
+            }
             setIsOpen(false);
             try {
                 await pendingAction.action();
@@ -45,7 +52,7 @@ export function useMainnetConfirmation<T = unknown>() {
                 setPendingAction(null);
             }
         }
-    }, [pendingAction]);
+    }, [alwaysConfirm, pendingAction]);
 
     const cancel = useCallback(() => {
         setIsOpen(false);
@@ -57,6 +64,7 @@ export function useMainnetConfirmation<T = unknown>() {
         confirm,
         hasPendingAction: pendingAction !== null,
         isOpen,
+        pendingContext: pendingAction?.context,
         requireConfirmation,
     };
 }

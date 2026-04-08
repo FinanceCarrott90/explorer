@@ -89,11 +89,34 @@ describe('useMainnetConfirmation', () => {
             });
 
             expect(result.current.hasPendingAction).toBe(true);
+            expect(result.current.pendingContext).toEqual(testContext);
             await act(async () => {
                 await result.current.confirm();
             });
 
             expect(mockAction).toHaveBeenCalledTimes(1);
+        });
+
+        it('should force confirmation when alwaysConfirm is true even with cookie', async () => {
+            setup();
+            vi.mocked(getCookie).mockReturnValue('true');
+
+            const mockAction = vi.fn();
+            const { result } = renderHook(() => useMainnetConfirmation({ alwaysConfirm: true }));
+
+            await act(async () => {
+                await result.current.requireConfirmation(mockAction);
+            });
+
+            expect(result.current.hasPendingAction).toBe(true);
+            expect(result.current.isOpen).toBe(true);
+
+            await act(async () => {
+                await result.current.confirm();
+            });
+
+            expect(mockAction).toHaveBeenCalledTimes(1);
+            expect(setCookie).not.toHaveBeenCalled();
         });
     });
 
